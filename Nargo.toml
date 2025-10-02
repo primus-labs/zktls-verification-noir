@@ -1,0 +1,9 @@
+[package]
+name = "attestation_verification_noir"
+type = "bin"
+authors = [""]
+
+[dependencies]
+keccak256 = { tag = "v0.1.1", git = "https://github.com/noir-lang/keccak256" }
+string_search = { tag = "v0.3.3", git = "https://github.com/noir-lang/noir_string_search"}
+json_parser = { tag = "v0.4.1-hc.0", git = "https://github.com/hashcloak/noir_json_parser"}
