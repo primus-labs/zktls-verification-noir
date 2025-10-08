@@ -41,16 +41,16 @@ export const AttVerifierContractArtifact = loadContractArtifact(AttVerifierContr
  * Type-safe interface for contract AttVerifier;
  */
 export class AttVerifierContract extends ContractBase {
-
+  
   private constructor(
     instance: ContractInstanceWithAddress,
     wallet: Wallet,
   ) {
     super(instance, AttVerifierContractArtifact, wallet);
   }
+  
 
-
-
+  
   /**
    * Creates a contract instance.
    * @param address - The deployed contract's address.
@@ -64,18 +64,18 @@ export class AttVerifierContract extends ContractBase {
     return Contract.at(address, AttVerifierContract.artifact, wallet) as Promise<AttVerifierContract>;
   }
 
-
+  
   /**
    * Creates a tx to deploy a new instance of this contract.
    */
-  public static deploy(wallet: Wallet,) {
+  public static deploy(wallet: Wallet, ) {
     return new DeployMethod<AttVerifierContract>(PublicKeys.default(), wallet, AttVerifierContractArtifact, AttVerifierContract.at, Array.from(arguments).slice(1));
   }
 
   /**
    * Creates a tx to deploy a new instance of this contract using the specified public keys hash to derive the address.
    */
-  public static deployWithPublicKeys(publicKeys: PublicKeys, wallet: Wallet,) {
+  public static deployWithPublicKeys(publicKeys: PublicKeys, wallet: Wallet, ) {
     return new DeployMethod<AttVerifierContract>(publicKeys, wallet, AttVerifierContractArtifact, AttVerifierContract.at, Array.from(arguments).slice(2));
   }
 
@@ -95,9 +95,9 @@ export class AttVerifierContract extends ContractBase {
       opts.method ?? 'constructor',
     );
   }
+  
 
-
-
+  
   /**
    * Returns this contract's artifact.
    */
@@ -111,18 +111,15 @@ export class AttVerifierContract extends ContractBase {
   public static get artifactForPublic(): ContractArtifact {
     return loadContractArtifactForPublic(AttVerifierContractArtifactJson as NoirCompiledContract);
   }
+  
 
-
-
+  
 
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public declare methods: {
-
-    /** check_allowed_url() */
-    check_allowed_url: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
-
-    /** decrypt_and_check(ct: struct, address: struct) */
-    decrypt_and_check: ((ct: (bigint | number)[], address: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    
+    /** get_allowed_url_index(request_url: struct, allowed_urls: array) */
+    get_allowed_url_index: ((request_url: (bigint | number)[], allowed_urls: (bigint | number)[][]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** process_message(message_ciphertext: struct, message_context: struct) */
     process_message: ((message_ciphertext: FieldLike[], message_context: { tx_hash: FieldLike, unique_note_hashes_in_tx: FieldLike[], first_nullifier_in_tx: FieldLike, recipient: AztecAddressLike }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
@@ -130,12 +127,15 @@ export class AttVerifierContract extends ContractBase {
     /** public_dispatch(selector: field) */
     public_dispatch: ((selector: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** sig_verfier(public_key_x: array, public_key_y: array, hash: array, sig: array) */
-    sig_verfier: ((public_key_x: (bigint | number)[], public_key_y: (bigint | number)[], hash: (bigint | number)[], sig: (bigint | number)[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** search(haystack: struct, needle: struct) */
+    search: ((haystack: (bigint | number)[], needle: (bigint | number)[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** sync_private_state() */
     sync_private_state: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** verify_attestation(public_key_x: array, public_key_y: array, hash: array, signature: array, request_url: struct, ciphertexts: array, ciphertext_lengths: struct, address: struct) */
+    verify_attestation: ((public_key_x: (bigint | number)[], public_key_y: (bigint | number)[], hash: (bigint | number)[], signature: (bigint | number)[], request_url: (bigint | number)[], ciphertexts: (bigint | number)[], ciphertext_lengths: (bigint | number)[], address: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
   };
 
-
+  
 }
