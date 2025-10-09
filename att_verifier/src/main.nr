@@ -67,28 +67,39 @@ pub contract AttVerifier {
         // TODO decrypt ciphertexts
         // Safety:
         let plaintext = unsafe { decrypt_full(ciphertexts, number_of_ciphertexts, nonce, aes_key) };
-
+        let json = unsafe { extract_json(plaintext, number_of_ciphertexts, json_blocks) };
         // extract only the piece of the plaintext that contains the relevant json
-        let mut json_bytes: BoundedVec<u8, 8192> = BoundedVec::new();
         // This doesn't compile
-        // for i in 0..6 {
-        //     if i < number_of_ciphertexts {
-        //         let start = json_blocks[i][0];
-        //         let end = json_blocks[i][1];
 
-        //         if end > start {
-        //             for j in 0..1536 {
-        //                 if j >= start & j <= end {
-        //                     json_bytes.push(plaintext[i * 1536 + j]);
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
         // BusinessProgram::at(address).verify(plaintext).call(&mut context);
         true
     }
 
+    #[contract_library_method]
+    unconstrained fn extract_json(
+        plaintext: [u8; 9216],
+        number_of_ciphertexts: u32,
+        json_blocks: [[u32; 2]; 6],
+    ) -> BoundedVec<u8, 9216> {
+        // TODO can we lower this bound?
+        let mut json_bytes: BoundedVec<u8, 9216> = BoundedVec::new();
+
+        for i in 0..6 {
+            if i < number_of_ciphertexts {
+                let start = json_blocks[i][0];
+                let end = json_blocks[i][1];
+
+                if end > start {
+                    for j in 0..1536 {
+                        if j >= start & j <= end {
+                            json_bytes.push(plaintext[i * 1536 + j]);
+                        }
+                    }
+                }
+            }
+        }
+        json_bytes
+    }
     #[contract_library_method]
     unconstrained fn decrypt_full(
         ciphertexts: [[u8; 1536]; 6], // empty ciphertexts should be padded with 0
