@@ -4,9 +4,9 @@ import { BusinessProgramContract } from "./bindings/BusinessProgram.ts"
 
 import fs from "fs";
 import { keccak_256 } from "@noble/hashes/sha3";
-import * as secp from "@noble/secp256k1";
+import { secp256k1 } from "@noble/curves/secp256k1";
 import { encodePacked, padTo } from "./lib/encoding";
-import { normalizeV, pubkeyToEthAddress } from "./lib/crypto";
+import { normalizeV } from "./lib/crypto";
 import { AttVerifierContract } from "./bindings/AttVerifier.ts";
 
 const pxe = await createPXEClient("http://localhost:8080");
@@ -37,24 +37,31 @@ const obj = JSON.parse(fs.readFileSync("testdata/attestation_data.json", "utf-8"
 const packedArr = encodePacked(obj.public_data);
 
 // signature
-let sigHex = obj.public_data.signatures[0].slice(2);
+// signature is 65 bytes (r||s||v)
+const sigHex = obj.public_data.signatures[0].slice(2);
 const sigBytes = Buffer.from(sigHex, "hex");
-const v = normalizeV(sigBytes[64]);
-// move the recover_id to the first byte
-const signature = Array.from(sigBytes);
-signature.pop()
-signature.unshift(v);
+
+// extract r, s, v
+const r = BigInt("0x" + sigBytes.slice(0, 32).toString("hex"));
+const s = BigInt("0x" + sigBytes.slice(32, 64).toString("hex"));
+let v = sigBytes[64];
+if (v === 27 || v === 28) v -= 27;
+const sig = new secp256k1.Signature(r, s, v);
+
+// prepare 64-byte compact signature for Noir circuit input
+const signature = Array.from(sig.toCompactRawBytes());
 
 // hash of packed data
 const msgHash = keccak_256(new Uint8Array(packedArr));
 const hash = Array.from(msgHash);
 
 // recover pubkey
-const pubkey = secp.recoverPublicKey(Uint8Array.from(signature), msgHash, { prehash: false });
-if (!pubkey) throw new Error("Failed to recover public key");
-const pubBytes = pubkey.slice(1);
-const public_key_x = Array.from(pubBytes.slice(0, 32));
-const public_key_y = Array.from(pubBytes.slice(32, 64));
+const pubkey = sig.recoverPublicKey(msgHash);
+
+// get raw uncompressed 65 bytes (04 || x || y)
+const pubBytes = pubkey.toRawBytes(false);
+const public_key_x = Array.from(pubBytes.slice(1, 33));
+const public_key_y = Array.from(pubBytes.slice(33, 65));
 
 // request_url
 const urlStr: string = obj.public_data.request.url;
@@ -66,41 +73,71 @@ const chrc = JSON.parse(dataObj.CompleteHttpResponseCiphertext);
 
 let allCiphertexts: number[][] = [];
 let allNonces: number[][] = [];
-let allBlockPositions: [number, number][][] = [];
+let allJsonBlocks: [number, number][] = []; // NEW
+
 for (const packet of chrc.packets) {
   for (const record of packet.records) {
     const ctBytes = Array.from(Buffer.from(record.ciphertext, "hex"));
     const nonceBytes = Array.from(Buffer.from(record.nonce, "hex"));
-
     allCiphertexts.push(ctBytes);
     allNonces.push(nonceBytes);
-    allBlockPositions.push(record.json_block_positions);
+
+    // grab json_block_positions (0 or 1 range in current data)
+    if (record.json_block_positions && record.json_block_positions.length > 0) {
+      const [start, end] = record.json_block_positions[0];
+      allJsonBlocks.push([start, end]);
+    } else {
+      allJsonBlocks.push([0, 0]);
+    }
   }
 }
-// Flatten ciphertexts and collect lengths
-let flatCiphertexts: number[] = [];
-let ciphertextLengths: number[] = [];
 
-for (const ct of allCiphertexts) {
-  flatCiphertexts.push(...ct);
-  ciphertextLengths.push(ct.length);
+function padArray(arr: number[], target: number): number[] {
+  if (arr.length > target) {
+    throw new Error(`Array too long: ${arr.length} > ${target}`);
+  }
+  return arr.concat(new Array(target - arr.length).fill(0));
 }
 
-console.log("Flat ciphertext total length:", flatCiphertexts.length);
-console.log("Ciphertext lengths array:", ciphertextLengths);
+const MAX_CT = 6;
+const CT_SLOT_SIZE = 1536;
+const NONCE_SIZE = 12;
 
-// ciphertexts: [u8; 7000]
-const ciphertextsFixed = padTo(flatCiphertexts, 7000); // pad to 7000 bytes
+let ciphertextsFixed: number[][] = [];
+let ciphertextLengths: number[] = [];
+let noncesFixed: number[][] = [];
+let jsonBlocksFixed: [number, number][] = []; // NEW
 
-// call verify_attestation
+for (let i = 0; i < MAX_CT; i++) {
+  if (i < allCiphertexts.length) {
+    ciphertextsFixed.push(padArray(allCiphertexts[i], CT_SLOT_SIZE));
+    ciphertextLengths.push(allCiphertexts[i].length);
+    noncesFixed.push(padArray(allNonces[i], NONCE_SIZE));
+    jsonBlocksFixed.push(allJsonBlocks[i] || [0, 0]);
+  } else {
+    ciphertextsFixed.push(new Array(CT_SLOT_SIZE).fill(0));
+    ciphertextLengths.push(0);
+    noncesFixed.push(new Array(NONCE_SIZE).fill(0));
+    jsonBlocksFixed.push([0, 0]);
+  }
+}
+
+const number_of_ciphertexts = allCiphertexts.length;
+
+// aes_key from test data (16 bytes hex string assumed)
+const aes_key = padArray(Array.from(Buffer.from(obj.private_data.aes_key, "hex")), 16);
+
 let result = await attVerifierContract.methods.verify_attestation(
   public_key_x,
   public_key_y,
   hash,
   signature,
   urlBytes,
-  ciphertextsFixed,
-  ciphertextLengths,
-  businessProgram.address,
+  ciphertextsFixed,      // [[u8;1536];6]
+  number_of_ciphertexts,     // [u32;6]
+  jsonBlocksFixed,       // [[u32;2];6]
+  noncesFixed,           // [[u8;12];6]
+  aes_key,               // [u8;16]
+  businessProgram.address
 ).send({ from: alice.getAddress() }).wait();
 console.log(result);

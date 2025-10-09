@@ -118,23 +118,17 @@ export class AttVerifierContract extends ContractBase {
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public declare methods: {
     
-    /** get_allowed_url_index(request_url: struct, allowed_urls: array) */
-    get_allowed_url_index: ((request_url: (bigint | number)[], allowed_urls: (bigint | number)[][]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
-
     /** process_message(message_ciphertext: struct, message_context: struct) */
     process_message: ((message_ciphertext: FieldLike[], message_context: { tx_hash: FieldLike, unique_note_hashes_in_tx: FieldLike[], first_nullifier_in_tx: FieldLike, recipient: AztecAddressLike }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** public_dispatch(selector: field) */
     public_dispatch: ((selector: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** search(haystack: struct, needle: struct) */
-    search: ((haystack: (bigint | number)[], needle: (bigint | number)[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
-
     /** sync_private_state() */
     sync_private_state: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** verify_attestation(public_key_x: array, public_key_y: array, hash: array, signature: array, request_url: struct, ciphertexts: array, ciphertext_lengths: struct, address: struct) */
-    verify_attestation: ((public_key_x: (bigint | number)[], public_key_y: (bigint | number)[], hash: (bigint | number)[], signature: (bigint | number)[], request_url: (bigint | number)[], ciphertexts: (bigint | number)[], ciphertext_lengths: (bigint | number)[], address: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** verify_attestation(public_key_x: array, public_key_y: array, hash: array, signature: array, request_url: struct, ciphertexts: array, number_of_ciphertexts: integer, json_blocks: array, nonce: array, aes_key: array, address: struct) */
+    verify_attestation: ((public_key_x: (bigint | number)[], public_key_y: (bigint | number)[], hash: (bigint | number)[], signature: (bigint | number)[], request_url: (bigint | number)[], ciphertexts: (bigint | number)[][], number_of_ciphertexts: (bigint | number), json_blocks: (bigint | number)[][], nonce: (bigint | number)[][], aes_key: (bigint | number)[], address: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
   };
 
   

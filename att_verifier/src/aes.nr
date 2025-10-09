@@ -5,6 +5,16 @@ pub struct BlockInfo {
     pub mask: [u8; 16],
 }
 
+pub fn aes_decrypt_slot1536(key: [u8; 16], nonce: [u8; 12], ciphertext: [u8; 1536]) -> [u8; 1536] {
+    // start from counter = 2 and generate exactly 1536 keystream bytes
+    let keystream = compute_continuous_counters(key, nonce, 1536);
+    let mut plaintext = [0u8; 1536];
+    for i in 0..1536 {
+        plaintext[i] = ciphertext[i] ^ keystream.get(i);
+    }
+    plaintext
+}
+
 // decryption in TLSData::verify
 pub fn aes_decrypt_full(
     key: [u8; 16],
