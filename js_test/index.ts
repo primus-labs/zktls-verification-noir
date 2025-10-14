@@ -1,14 +1,13 @@
 import { AztecAddress, createPXEClient } from "@aztec/aztec.js";
 import { getDeployedTestAccountsWallets } from "@aztec/accounts/testing";
-import { BusinessProgramContract } from "./bindings/BusinessProgram.ts"
 
 import fs from "fs";
 import { keccak_256 } from "@noble/hashes/sha3";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { encodePacked, padTo } from "./lib/encoding";
 import { normalizeV } from "./lib/crypto";
-import { AttVerifierContract } from "./bindings/AttVerifier.ts";
-
+import { BusinessProgramContract } from "./bindings/BusinessProgram.js";
+import { AttVerifierContract } from "./bindings/AttVerifier.js";
 const pxe = await createPXEClient("http://localhost:8080");
 
 const alice = (await getDeployedTestAccountsWallets(pxe))[0];
@@ -18,9 +17,9 @@ const bob = (await getDeployedTestAccountsWallets(pxe))[1];
 const businessProgram = await BusinessProgramContract.deploy(alice).send({ from: alice.getAddress() })
   .deployed();;
 // test calling verify()
-let reuslt = await businessProgram.methods.verify([1, 2, 3]).send({ from: alice.getAddress() })
-  .wait();
-console.log(reuslt);
+// let reuslt = await businessProgram.methods.verify([1, 2, 3]).send({ from: alice.getAddress() })
+//   .wait();
+// console.log(reuslt);
 
 // deploy attVerifierContract
 const attVerifierContract = await AttVerifierContract.deploy(alice).send({ from: alice.getAddress() })
@@ -99,7 +98,7 @@ function padArray(arr: number[], target: number): number[] {
   return arr.concat(new Array(target - arr.length).fill(0));
 }
 
-const MAX_CT = 6;
+const MAX_CT = 4;
 const CT_SLOT_SIZE = 1536;
 const NONCE_SIZE = 12;
 
@@ -127,17 +126,20 @@ const number_of_ciphertexts = allCiphertexts.length;
 // aes_key from test data (16 bytes hex string assumed)
 const aes_key = padArray(Array.from(Buffer.from(obj.private_data.aes_key, "hex")), 16);
 
+console.log("nr ciphertexts: ", ciphertextsFixed.length);
+console.log("nr nonces: ", noncesFixed.length);
+console.log("nr json blocks: ", jsonBlocksFixed.length);
 let result = await attVerifierContract.methods.verify_attestation(
   public_key_x,
   public_key_y,
   hash,
   signature,
   urlBytes,
-  ciphertextsFixed,      // [[u8;1536];6]
-  number_of_ciphertexts,     // [u32;6]
-  jsonBlocksFixed,       // [[u32;2];6]
-  noncesFixed,           // [[u8;12];6]
-  aes_key,               // [u8;16]
+  ciphertextsFixed,
+  number_of_ciphertexts,
+  jsonBlocksFixed,
+  noncesFixed,
+  aes_key,
   businessProgram.address
 ).send({ from: alice.getAddress() }).wait();
 console.log(result);
