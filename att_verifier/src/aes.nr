@@ -1,5 +1,7 @@
+use aztec::protocol_types::traits::Serialize;
 use std::{collections::{bounded_vec::BoundedVec, vec::Vec}, ops::WrappingAdd};
 
+#[derive(Serialize)]
 pub struct BlockInfo {
     pub id: u32,
     pub mask: [u8; 16],
@@ -29,21 +31,6 @@ pub fn aes_decrypt_full(
         plaintext.push(ciphertext[i] ^ keystream.get(i));
     }
     // TODO set len of plaintext to ciphertext.len()
-    plaintext
-}
-
-// decryption in TLSDataOpt::verify
-pub fn aes_decrypt_opt(
-    key: [u8; 16],
-    nonce: [u8; 12],
-    blocks: BoundedVec<BlockInfo, 512>,
-    ciphertext: BoundedVec<u8, 512>,
-) -> BoundedVec<u8, 512> {
-    let keystream = compute_selective_counters(key, nonce, blocks, ciphertext.len());
-    let mut plaintext = BoundedVec::<u8, 512>::new();
-    for i in 0..ciphertext.len() {
-        plaintext.push(ciphertext.get(i) ^ keystream.get(i));
-    }
     plaintext
 }
 
@@ -105,53 +92,6 @@ pub fn compute_continuous_counters(key: [u8; 16], nonce: [u8; 12], len: u32) -> 
             result.push(encrypted_counter[i]);
         }
     }
-    result
-}
-
-// compute necessary counter according blocks
-pub fn compute_selective_counters(
-    key: [u8; 16],
-    nonce: [u8; 12],
-    blocks: BoundedVec<BlockInfo, 512>,
-    len: u32,
-) -> Vec<u8> {
-    let mut result = Vec::<u8>::new();
-
-    // check block len
-    let mut out_len: u32 = 0;
-    for i in 0..blocks.len() {
-        let block = blocks.get(i);
-        for j in 0..16 {
-            out_len += block.mask[j] as u32;
-        }
-        let nonce_index = block.id + 2;
-        let mask = block.mask;
-        let mut full_nonce: [u8; 16] = [0u8; 16];
-        full_nonce[0] = nonce[0];
-        full_nonce[1] = nonce[1];
-        full_nonce[2] = nonce[2];
-        full_nonce[3] = nonce[3];
-        full_nonce[4] = nonce[4];
-        full_nonce[5] = nonce[5];
-        full_nonce[6] = nonce[6];
-        full_nonce[7] = nonce[7];
-        full_nonce[8] = nonce[8];
-        full_nonce[9] = nonce[9];
-        full_nonce[10] = nonce[10];
-        full_nonce[11] = nonce[11];
-        full_nonce[12] = (nonce_index >> 24) as u8;
-        full_nonce[13] = ((nonce_index >> 16) & 0xFF) as u8;
-        full_nonce[14] = ((nonce_index >> 8) & 0xFF) as u8;
-        full_nonce[15] = ((nonce_index) & 0xFF) as u8;
-        let encrypted_counter = aes128_encrypt_block(key, full_nonce);
-        for i in 0..16 {
-            if mask[i] == 1 {
-                result.push(encrypted_counter[i]);
-            }
-        }
-    }
-    assert(out_len == len);
-
     result
 }
 
