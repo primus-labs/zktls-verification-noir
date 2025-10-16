@@ -1,13 +1,17 @@
+mod aes;
 use dep::aztec::macros::aztec;
 
 #[aztec]
 pub contract AttVerifier {
+
     use aztec::{
         macros::{functions::{initializer, private, public, utility}, storage::storage},
         protocol_types::address::AztecAddress,
+        event::event_interface::{emit_event_in_public},
     };
     use business_program::BusinessProgram;
     use string_search::{StringBody, StringBody1024, SubString, SubString1024};
+    use crate::aes::aes_decrypt_full;
 
     global MAX_URL_LEN: u32 = 1024;
 
@@ -20,9 +24,13 @@ pub contract AttVerifier {
         request_url: BoundedVec<u8, MAX_URL_LEN>,
         // Compilation fails for BoundedVec<BoundedVec<u8, 1400>, 10>
         // It passes for BoundedVec<BoundedVec<u8, 1400>, 4>
-        // In this approach; pack the ciphertexts together and pass the exact lengths of each ciphertext separately
-        ciphertexts: [u8; 7000],
-        ciphertext_lengths: BoundedVec<u32, 10>,
+        // // In this approach; pack the ciphertexts together and pass the exact lengths of each ciphertext separately
+        // compiler crashes when set to 2048 or 1536 * 10
+        ciphertexts: [[u8; 1536]; 6], // empty ciphertexts should be padded 0 
+        ciphertext_lengths: [u32; 6], // empty ciphertexts should have 0 length
+        number_of_ciphertexts: u32,
+        nonce: [[u8; 12]; 6],
+        aes_key: [u8; 16],
         address: AztecAddress,
     ) -> bool {
         // TODO allowed URLS can be set in the contract storage?
@@ -54,13 +62,44 @@ pub contract AttVerifier {
 
         // TODO add missing input arguments
         // TODO decrypt ciphertexts
+        let plaintext = unsafe {decrypt_full(ciphertexts, number_of_ciphertexts, nonce, aes_key)};
 
-        let plaintext = BoundedVec::<u8, 1024>::from_array([0u8; 1024]);
+        let plaintext1 = BoundedVec::<u8, 1024>::from_array([0u8; 1024]);
 
-        BusinessProgram::at(address).verify(plaintext).call(&mut context);
+        BusinessProgram::at(address).verify(plaintext1).call(&mut context);
     }
 
-    #[utility]
+    #[contract_library_method]
+    unconstrained fn decrypt_full( 
+        ciphertexts: [[u8; 1536]; 6], // empty ciphertexts should be padded 0 
+        number_of_ciphertexts: u32,
+        nonce: [[u8; 12]; 6],
+        aes_key: [u8; 16],
+    ) -> [[u8; 1536]; 6] {
+        let mut plaintexts:[[u8; 1536]; 6] = [[0u8; 1536]; 6];
+        for i in 0..6{
+            if i < number_of_ciphertexts{
+                // one ciphertext includes 3 512-byte chunks
+                for j in 0..3{
+                    // chunk of 512 for decryption
+                    let mut chunk = [0u8; 512];
+                    for k in 0..512{
+                        chunk[k] = ciphertexts[i][(512*j)+k];
+                    }
+                    // decrypt and insert to plaintexts
+                    let pt = aes_decrypt_full(aes_key, nonce[i],chunk);
+                    for k in 0..512{
+                        plaintexts[i][(512*j)+k] = pt.get(k);
+                    }
+                    
+                }
+            }
+    
+        };
+        plaintexts
+    }
+
+    #[contract_library_method]
     unconstrained fn get_allowed_url_index(
         request_url: BoundedVec<u8, MAX_URL_LEN>,
         allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 4], // TODO this probably shouldn't have a fixed len
@@ -82,7 +121,7 @@ pub contract AttVerifier {
 
     // Adapted version of library function, which doesn't assert found to be true
     // https://github.com/noir-lang/noir_string_search/blob/v0.3.3/src/utils.nr#L1-L29
-    #[utility]
+    #[contract_library_method]
     unconstrained fn search(
         haystack: BoundedVec<u8, MAX_URL_LEN>,
         needle: BoundedVec<u8, MAX_URL_LEN>,
