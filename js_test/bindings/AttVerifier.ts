@@ -36,28 +36,28 @@ import AttVerifierContractArtifactJson from './att_verifier-AttVerifier.json' wi
 export const AttVerifierContractArtifact = loadContractArtifact(AttVerifierContractArtifactJson as NoirCompiledContract);
 
 
-export type SuccessEvent = {
-  sender: AztecAddressLike
-  att_verifier_address: AztecAddressLike
-  business_logic_address: AztecAddressLike
-  id: FieldLike
-}
-
+      export type SuccessEvent = {
+        sender: AztecAddressLike
+att_verifier_address: AztecAddressLike
+business_logic_address: AztecAddressLike
+id: FieldLike
+      }
+    
 
 /**
  * Type-safe interface for contract AttVerifier;
  */
 export class AttVerifierContract extends ContractBase {
-
+  
   private constructor(
     instance: ContractInstanceWithAddress,
     wallet: Wallet,
   ) {
     super(instance, AttVerifierContractArtifact, wallet);
   }
+  
 
-
-
+  
   /**
    * Creates a contract instance.
    * @param address - The deployed contract's address.
@@ -71,18 +71,18 @@ export class AttVerifierContract extends ContractBase {
     return Contract.at(address, AttVerifierContract.artifact, wallet) as Promise<AttVerifierContract>;
   }
 
-
+  
   /**
    * Creates a tx to deploy a new instance of this contract.
    */
-  public static deploy(wallet: Wallet,) {
+  public static deploy(wallet: Wallet, ) {
     return new DeployMethod<AttVerifierContract>(PublicKeys.default(), wallet, AttVerifierContractArtifact, AttVerifierContract.at, Array.from(arguments).slice(1));
   }
 
   /**
    * Creates a tx to deploy a new instance of this contract using the specified public keys hash to derive the address.
    */
-  public static deployWithPublicKeys(publicKeys: PublicKeys, wallet: Wallet,) {
+  public static deployWithPublicKeys(publicKeys: PublicKeys, wallet: Wallet, ) {
     return new DeployMethod<AttVerifierContract>(publicKeys, wallet, AttVerifierContractArtifact, AttVerifierContract.at, Array.from(arguments).slice(2));
   }
 
@@ -102,9 +102,9 @@ export class AttVerifierContract extends ContractBase {
       opts.method ?? 'constructor',
     );
   }
+  
 
-
-
+  
   /**
    * Returns this contract's artifact.
    */
@@ -118,13 +118,13 @@ export class AttVerifierContract extends ContractBase {
   public static get artifactForPublic(): ContractArtifact {
     return loadContractArtifactForPublic(AttVerifierContractArtifactJson as NoirCompiledContract);
   }
+  
 
-
-
+  
 
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public declare methods: {
-
+    
     /** process_message(message_ciphertext: struct, message_context: struct) */
     process_message: ((message_ciphertext: FieldLike[], message_context: { tx_hash: FieldLike, unique_note_hashes_in_tx: FieldLike[], first_nullifier_in_tx: FieldLike, recipient: AztecAddressLike }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
@@ -138,71 +138,71 @@ export class AttVerifierContract extends ContractBase {
     verify_attestation: ((public_key_x: (bigint | number)[], public_key_y: (bigint | number)[], hash: (bigint | number)[], signature: (bigint | number)[], request_url: (bigint | number)[], ciphertexts: (bigint | number)[][], number_of_ciphertexts: (bigint | number), json_blocks: (bigint | number)[][], nonce: (bigint | number)[][], aes_key: (bigint | number)[], business_logic_address: AztecAddressLike, id: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
   };
 
-
-  public static get events(): { SuccessEvent: { abiType: AbiType, eventSelector: EventSelector, fieldNames: string[] } } {
+  
+    public static get events(): { SuccessEvent: {abiType: AbiType, eventSelector: EventSelector, fieldNames: string[] } } {
     return {
       SuccessEvent: {
         abiType: {
-          "kind": "struct",
-          "fields": [
-            {
-              "name": "sender",
-              "type": {
+    "kind": "struct",
+    "fields": [
+        {
+            "name": "sender",
+            "type": {
                 "kind": "struct",
                 "fields": [
-                  {
-                    "name": "inner",
-                    "type": {
-                      "kind": "field"
+                    {
+                        "name": "inner",
+                        "type": {
+                            "kind": "field"
+                        }
                     }
-                  }
                 ],
                 "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
-              }
-            },
-            {
-              "name": "att_verifier_address",
-              "type": {
-                "kind": "struct",
-                "fields": [
-                  {
-                    "name": "inner",
-                    "type": {
-                      "kind": "field"
-                    }
-                  }
-                ],
-                "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
-              }
-            },
-            {
-              "name": "business_logic_address",
-              "type": {
-                "kind": "struct",
-                "fields": [
-                  {
-                    "name": "inner",
-                    "type": {
-                      "kind": "field"
-                    }
-                  }
-                ],
-                "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
-              }
-            },
-            {
-              "name": "id",
-              "type": {
-                "kind": "field"
-              }
             }
-          ],
-          "path": "AttVerifier::SuccessEvent"
         },
+        {
+            "name": "att_verifier_address",
+            "type": {
+                "kind": "struct",
+                "fields": [
+                    {
+                        "name": "inner",
+                        "type": {
+                            "kind": "field"
+                        }
+                    }
+                ],
+                "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
+            }
+        },
+        {
+            "name": "business_logic_address",
+            "type": {
+                "kind": "struct",
+                "fields": [
+                    {
+                        "name": "inner",
+                        "type": {
+                            "kind": "field"
+                        }
+                    }
+                ],
+                "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
+            }
+        },
+        {
+            "name": "id",
+            "type": {
+                "kind": "field"
+            }
+        }
+    ],
+    "path": "AttVerifier::SuccessEvent"
+},
         eventSelector: EventSelector.fromString("0xb77c60d9"),
-        fieldNames: ["sender", "att_verifier_address", "business_logic_address", "id"],
+        fieldNames: ["sender","att_verifier_address","business_logic_address","id"],
       }
     };
   }
-
+  
 }
