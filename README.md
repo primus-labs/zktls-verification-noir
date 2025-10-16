@@ -14,14 +14,13 @@ https://hackmd.io/zIFf5ChpRfGcT60e2KCRAQ?stext=1549%3A62%3A0%3A1759918279%3AuB_A
 
 --------------------on Aztec chain--------------------
 
-6. AttVerifier contract verify signature, check allowed urls, and decrypt the cipher text
+6. AttVerifier contract verifies signature, check allowed urls, and decrypts the ciphertext
 7. AttVerifier calls BusinessProgram which includes the customized conditions and is deployed by the developers
 8. BusinessProgram checks the condition and returns to AttVerifier
-9. AttVerifier returns the result
+9. AttVerifier sends a public "success" event and returns the result
 
 
-
-## Component
+## Components
 
 ### att_verifier
 Main attestation verifier contract. Includes the logic for signature verification, url check and AES decryption.
@@ -60,3 +59,31 @@ aztec codegen -o src/artifacts target
 yarn
 yarn start
 ```
+
+## Adjust business logic
+
+The current demo in `js_test` and specific business implementation in `real_business_program` takes `js_test/test_data/attestation_data.json` and:
+- verifies it is a valid attestation (`AttVerifier`)
+- checks the obtained plaintext has screen_name "primus_labs" and a followers_count larger than 1000 ( `BusinessProgram`)
+
+### Aztec business contract
+
+To write a different demo, create your own [Aztec contract](https://docs.aztec.network/) that implements the function
+```rust
+#[private]
+fn verify(plaintext: BoundedVec<u8, 4096>) -> bool {
+    // TODO
+}
+```
+
+See `/real_business_program` for an example of how to parse the plaintext to JSON and obtain values from it. 
+
+### Deploying and calling the contract
+
+In the script you have to:
+1. Deploy the `AttVerifier` (ultimately this could be deployed once).
+2. Deploy the `BusinessProgram`, specific for your usecase.
+3. Parse the data from the `attestation_json` correctly to input to the Aztec smart contract.
+4. Call `attVerifierContract.methods.verify_attestation` using the contract address of step (2) as one of the inputs.
+
+See for an example `js_test/index.ts`. Note that currently the Aztec js SDK is the only SDK available for contract interaction. 

@@ -16,18 +16,10 @@ const bob = (await getDeployedTestAccountsWallets(pxe))[1];
 // deploy business program
 const businessProgram = await BusinessProgramContract.deploy(alice).send({ from: alice.getAddress() })
   .deployed();;
-// test calling verify()
-// let reuslt = await businessProgram.methods.verify([1, 2, 3]).send({ from: alice.getAddress() })
-//   .wait();
-// console.log(reuslt);
 
 // deploy attVerifierContract
 const attVerifierContract = await AttVerifierContract.deploy(alice).send({ from: alice.getAddress() })
   .deployed();
-
-// --- prepare inputs for verify_attestation ---
-const MAX_URL_LEN = 1024;
-const MAX_ALLOWED_URLS = 10;
 
 // load attestation testdata
 const obj = JSON.parse(fs.readFileSync("testdata/attestation_data.json", "utf-8"));
@@ -35,7 +27,6 @@ const obj = JSON.parse(fs.readFileSync("testdata/attestation_data.json", "utf-8"
 // pack data
 const packedArr = encodePacked(obj.public_data);
 
-// signature
 // signature is 65 bytes (r||s||v)
 const sigHex = obj.public_data.signatures[0].slice(2);
 const sigBytes = Buffer.from(sigHex, "hex");
@@ -72,7 +63,7 @@ const chrc = JSON.parse(dataObj.CompleteHttpResponseCiphertext);
 
 let allCiphertexts: number[][] = [];
 let allNonces: number[][] = [];
-let allJsonBlocks: [number, number][] = []; // NEW
+let allJsonBlocks: [number, number][] = [];
 
 for (const packet of chrc.packets) {
   for (const record of packet.records) {
@@ -105,7 +96,7 @@ const NONCE_SIZE = 12;
 let ciphertextsFixed: number[][] = [];
 let ciphertextLengths: number[] = [];
 let noncesFixed: number[][] = [];
-let jsonBlocksFixed: [number, number][] = []; // NEW
+let jsonBlocksFixed: [number, number][] = [];
 
 for (let i = 0; i < MAX_CT; i++) {
   if (i < allCiphertexts.length) {
