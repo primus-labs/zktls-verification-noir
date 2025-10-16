@@ -5,11 +5,24 @@ use aes::aes_decrypt_slot1536;
 pub contract AttVerifier {
 
     use crate::aes::aes_decrypt_slot1536;
-    use aztec::{macros::functions::private, protocol_types::address::AztecAddress};
+    use aztec::{
+        event::event_interface::emit_event_in_public,
+        macros::{events::event, functions::{internal, private, public}},
+        protocol_types::address::AztecAddress,
+    };
     use business_program::BusinessProgram;
     use string_search::{StringBody, StringBody1024, SubString, SubString1024};
 
     global MAX_URL_LEN: u32 = 1024;
+
+    //Emitted public log limit: 13 fields
+    #[event]
+    struct SuccessEvent {
+        sender: AztecAddress,
+        att_verifier_address: AztecAddress,
+        business_logic_address: AztecAddress,
+        id: Field,
+    }
 
     #[private]
     fn verify_attestation(
@@ -23,7 +36,8 @@ pub contract AttVerifier {
         json_blocks: [[u32; 2]; 4],
         nonce: [[u8; 12]; 4],
         aes_key: [u8; 16],
-        address: AztecAddress,
+        business_logic_address: AztecAddress,
+        id: Field, // id for this attestation
     ) -> bool {
         // TODO allowed URLS can be set in the contract storage?
         let allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 4] = [
@@ -59,7 +73,32 @@ pub contract AttVerifier {
         let json = unsafe { extract_json(plaintext, number_of_ciphertexts, json_blocks) };
         verify_extracted_json(plaintext, json, json_blocks);
 
-        BusinessProgram::at(address).verify(json).call(&mut context);
+        let result = BusinessProgram::at(business_logic_address).verify(json).call(&mut context);
+        if result {
+            AttVerifier::at(context.this_address())
+                ._emit_success_event(
+                    context.msg_sender(),
+                    context.this_address(),
+                    business_logic_address,
+                    id,
+                )
+                .enqueue(&mut context);
+        }
+        result
+    }
+
+    #[public]
+    #[internal]
+    fn _emit_success_event(
+        sender: AztecAddress,
+        att_verifier_address: AztecAddress,
+        business_logic_address: AztecAddress,
+        id: Field,
+    ) {
+        emit_event_in_public(
+            SuccessEvent { sender, att_verifier_address, business_logic_address, id },
+            &mut context,
+        );
     }
 
     #[contract_library_method]

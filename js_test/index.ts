@@ -7,7 +7,7 @@ import { secp256k1 } from "@noble/curves/secp256k1";
 import { encodePacked, padTo } from "./lib/encoding";
 import { normalizeV } from "./lib/crypto";
 import { BusinessProgramContract } from "./bindings/BusinessProgram.js";
-import { AttVerifierContract } from "./bindings/AttVerifier.js";
+import { AttVerifierContract, SuccessEvent } from "./bindings/AttVerifier.js";
 const pxe = await createPXEClient("http://localhost:8080");
 
 const alice = (await getDeployedTestAccountsWallets(pxe))[0];
@@ -129,6 +129,8 @@ const aes_key = padArray(Array.from(Buffer.from(obj.private_data.aes_key, "hex")
 console.log("nr ciphertexts: ", ciphertextsFixed.length);
 console.log("nr nonces: ", noncesFixed.length);
 console.log("nr json blocks: ", jsonBlocksFixed.length);
+// create random id for this attestation
+const id = Math.floor(Math.random() * 9999999999);
 let result = await attVerifierContract.methods.verify_attestation(
   public_key_x,
   public_key_y,
@@ -140,6 +142,19 @@ let result = await attVerifierContract.methods.verify_attestation(
   jsonBlocksFixed,
   noncesFixed,
   aes_key,
-  businessProgram.address
+  businessProgram.address,
+  id
 ).send({ from: alice.getAddress() }).wait();
 console.log(result);
+
+if (result.status != "success") {
+  console.log("verification failed");
+}
+const publicLogs = (await pxe.getPublicEvents(AttVerifierContract.events.SuccessEvent, result.blockNumber as number, result.blockNumber as number));
+for (const log of publicLogs) {
+  if ((log as SuccessEvent).id == id) {
+    console.log("Verification success");
+    console.log(log)
+  }
+
+}
