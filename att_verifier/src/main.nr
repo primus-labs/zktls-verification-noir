@@ -1,12 +1,12 @@
 mod aes;
 use dep::aztec::macros::aztec;
-use aes::aes_decrypt_slot1536;
+
 #[aztec]
 pub contract AttVerifier {
 
     use crate::aes::aes_decrypt_slot1536;
     use aztec::{
-        event::event_interface::emit_event_in_public,
+        event::event_emission::emit_event_in_public,
         macros::{events::event, functions::{internal, private, public}},
         protocol_types::address::AztecAddress,
     };
@@ -31,6 +31,7 @@ pub contract AttVerifier {
         hash: [u8; 32],
         signature: [u8; 64],
         request_url: BoundedVec<u8, MAX_URL_LEN>,
+        allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
         ciphertexts: [[u8; 1536]; 4], // empty ciphertexts should be padded 0
         number_of_ciphertexts: u32,
         json_blocks: [[u32; 2]; 4],
@@ -39,16 +40,6 @@ pub contract AttVerifier {
         business_logic_address: AztecAddress,
         id: Field, // id for this attestation
     ) -> bool {
-        // TODO allowed URLS can be set in the contract storage?
-        let allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 4] = [
-            BoundedVec::from_array(
-                "https://x.com/i/api/graphql/96tVxbPqMZDoYB5pmzezKA/UserByScreenName".as_bytes(),
-            ),
-            BoundedVec::from_array("https://github.com".as_bytes()),
-            BoundedVec::from_array("https://x.com".as_bytes()),
-            BoundedVec::from_array("https://primuslabs.xyz".as_bytes()),
-        ];
-
         // 1. Check signature
         assert(std::ecdsa_secp256k1::verify_signature(public_key_x, public_key_y, signature, hash));
 
@@ -74,16 +65,17 @@ pub contract AttVerifier {
         verify_extracted_json(plaintext, json, json_blocks);
 
         let result = BusinessProgram::at(business_logic_address).verify(json).call(&mut context);
-        if result {
-            AttVerifier::at(context.this_address())
-                ._emit_success_event(
-                    context.msg_sender(),
-                    context.this_address(),
-                    business_logic_address,
-                    id,
-                )
-                .enqueue(&mut context);
-        }
+        // TODO emit public event
+        // if result {
+        //     AttVerifier::at(context.this_address())
+        //         ._emit_success_event(
+        //             context.msg_sender().unwrap(),
+        //             context.this_address(),
+        //             business_logic_address,
+        //             id,
+        //         )
+        //         .enqueue(&mut context);
+        // }
         result
     }
 
@@ -169,7 +161,7 @@ pub contract AttVerifier {
     #[contract_library_method]
     unconstrained fn get_allowed_url_index(
         request_url: BoundedVec<u8, MAX_URL_LEN>,
-        allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 4], // TODO this probably shouldn't have a fixed len
+        allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 2], // TODO this probably shouldn't have a fixed len
     ) -> (bool, u32) {
         let mut found = false;
         let mut index: u32 = 3050913689; // max u32 value to indicate "not found"

@@ -2,7 +2,7 @@ use dep::aztec::macros::aztec;
 
 #[aztec]
 pub contract BusinessProgram {
-    use dep::json_parser::JSON8kb;
+    use dep::json_parser::JSON4kb;
     use aztec::macros::functions::private;
 
     #[private]
@@ -23,9 +23,9 @@ pub contract BusinessProgram {
         // Safety: first sanitize the plaintext to ensure it is valid ASCII, then check this was done correctly
         let sanitized = unsafe { sanitize_ascii(plaintext) };
         // Uncommenting this check fails compilation
-        // verify_sanitized_ascii(plaintext, sanitized);
+        verify_sanitized_ascii(plaintext, sanitized);
 
-        let json = JSON8kb::parse_bounded_vec_json(sanitized);
+        let json = JSON4kb::parse_bounded_vec_json(sanitized);
 
         let key0: BoundedVec<u8, 15> = BoundedVec::from_array("data".as_bytes());
         let key1: BoundedVec<u8, 15> = BoundedVec::from_array("user".as_bytes());
