@@ -11,9 +11,10 @@ pub contract AttVerifier {
         protocol_types::address::AztecAddress,
     };
     use business_program::BusinessProgram;
+    use sha256::sha256_var;
     use string_search::{StringBody, StringBody1024, SubString, SubString1024};
-
     global MAX_URL_LEN: u32 = 1024;
+    global MAX_CONTENT_LEN: u32 = 1000;
 
     //Emitted public log limit: 13 fields
     #[event]
@@ -23,7 +24,7 @@ pub contract AttVerifier {
         business_logic_address: AztecAddress,
         id: Field,
     }
-
+    // gatecount 422.020 (versus 1.397.472 previously)
     #[private]
     fn verify_attestation(
         public_key_x: [u8; 32],
@@ -32,11 +33,8 @@ pub contract AttVerifier {
         signature: [u8; 64],
         request_url: BoundedVec<u8, MAX_URL_LEN>,
         allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
-        ciphertexts: [[u8; 1536]; 4], // empty ciphertexts should be padded 0
-        number_of_ciphertexts: u32,
-        json_blocks: [[u32; 2]; 4],
-        nonce: [[u8; 12]; 4],
-        aes_key: [u8; 16],
+        data_hashes: [[u8; 32]; 2],
+        plain_json_response: [BoundedVec<u8, MAX_CONTENT_LEN>; 2],
         business_logic_address: AztecAddress,
         id: Field, // id for this attestation
     ) -> bool {
@@ -57,14 +55,18 @@ pub contract AttVerifier {
         // A match result is only valid if the match position is 0 (i.e., the allowed_url is a prefix of request_url)
         assert(result & (match_position == 0), "URL check failed");
 
-        // 3. Obtain plaintext and get the json part out of it
-        let plaintext = decrypt_full(ciphertexts, number_of_ciphertexts, nonce, aes_key);
+        // 3. Hash plain_json_responses and check with input hashes
+        for i in 0..2 {
+            let hash = sha256_var(
+                plain_json_response[i].storage(),
+                plain_json_response[i].len() as u64,
+            );
+            assert(hash == data_hashes[i]);
+        }
 
-        // Safety: extract the json part from the plaintext and then we check it was done correctly
-        let json = unsafe { extract_json(plaintext, number_of_ciphertexts, json_blocks) };
-        verify_extracted_json(plaintext, json, json_blocks);
-
-        let result = BusinessProgram::at(business_logic_address).verify(json).call(&mut context);
+        let result = BusinessProgram::at(business_logic_address).verify(plain_json_response).call(
+            &mut context,
+        );
         // TODO emit public event
         // if result {
         //     AttVerifier::at(context.this_address())

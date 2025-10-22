@@ -2,59 +2,48 @@ use dep::aztec::macros::aztec;
 
 #[aztec]
 pub contract BusinessProgram {
-    use dep::json_parser::JSON4kb;
+    use dep::json_parser::JSON1kb;
     use aztec::macros::functions::private;
+    global MAX_CONTENT_LEN: u32 = 1000;
 
+    // gatecount 222.973 (versus 476.199), but note there are no assertions done on the values
+    // json_paths.push("$.data[*].baseCcy"); is a string
+    // json_paths.push("$.data[*].instIdCode"); is a number
     #[private]
-    fn verify(plaintext: BoundedVec<u8, 4096>) -> bool {
-        // Parse plaintext to JSON and obtain the custom values we want to check
-        let (screen_name, followers_count) = get_values(plaintext);
+    fn verify(plain_json_response: [BoundedVec<u8, MAX_CONTENT_LEN>; 2]) -> bool {
+        // Each of the plaintexts must be parsed to json
+        for i in 0..2 {
+            // Parse plaintext to JSON and obtain the custom values we want to check
+            let (base_ccy, inst_id_code) = get_values(plain_json_response[i]);
 
-        // Assume the contract has some array of approved screen names, then we can do string_search check
-        assert(screen_name == BoundedVec::from_array("primus_labs".as_bytes()));
-
-        assert(followers_count >= 1000);
+            // TODO what to assert about base_ccy and inst_id_code
+        }
 
         true
     }
 
     #[contract_library_method]
-    fn get_values(plaintext: BoundedVec<u8, 4096>) -> (BoundedVec<u8, 50>, u64) {
-        // Safety: first sanitize the plaintext to ensure it is valid ASCII, then check this was done correctly
-        let sanitized = unsafe { sanitize_ascii(plaintext) };
-        // Uncommenting this check fails compilation
-        verify_sanitized_ascii(plaintext, sanitized);
+    fn get_values(plaintext: BoundedVec<u8, MAX_CONTENT_LEN>) -> (BoundedVec<u8, 5>, u64) {
+        // TODO is this needed?
+        // // Safety: first sanitize the plaintext to ensure it is valid ASCII, then check this was done correctly
+        // let sanitized = unsafe { sanitize_ascii(plaintext) };
+        // // Uncommenting this check fails compilation
+        // verify_sanitized_ascii(plaintext, sanitized);
 
-        let json = JSON4kb::parse_bounded_vec_json(sanitized);
+        let json = JSON1kb::parse_bounded_vec_json(plaintext);
 
-        let key0: BoundedVec<u8, 15> = BoundedVec::from_array("data".as_bytes());
-        let key1: BoundedVec<u8, 15> = BoundedVec::from_array("user".as_bytes());
-        let key2: BoundedVec<u8, 15> = BoundedVec::from_array("result".as_bytes());
+        let key0: BoundedVec<u8, 4> = BoundedVec::from_array("data".as_bytes());
 
-        let keys: [BoundedVec<u8, 15>; 3] = [key0, key1, key2];
+        let data_array = json.get_array(key0).unwrap();
+        let first_item: JSON1kb = data_array.get_object_from_array(0).unwrap();
 
-        let mut target = json;
-        for i in 0..3 {
-            let child = target.get_object(keys[i]);
-            target = child.unwrap_unchecked();
-        }
-        let result_json = target;
+        let key1: BoundedVec<u8, 7> = BoundedVec::from_array("baseCcy".as_bytes());
+        let base_ccy: BoundedVec<u8, 5> = first_item.get_string_from_path([key1]).unwrap();
 
-        let key3: BoundedVec<u8, 15> = BoundedVec::from_array("core".as_bytes());
-        let key4: BoundedVec<u8, 15> = BoundedVec::from_array("screen_name".as_bytes());
-        // TODO add error handeling for unwrap
-        // Retrieve number data.user.result.core.screen_name
-        let screen_name: BoundedVec<u8, 50> =
-            result_json.get_string_from_path([key3, key4]).unwrap();
+        let key2: BoundedVec<u8, 10> = BoundedVec::from_array("instIdCode".as_bytes());
+        let inst_id_code: u64 = first_item.get_number(key2).unwrap();
 
-        let key5: BoundedVec<u8, 15> = BoundedVec::from_array("legacy".as_bytes());
-        let key6: BoundedVec<u8, 15> = BoundedVec::from_array("followers_count".as_bytes());
-
-        // Retrieve number data.user.result.legacy.followers_count
-        let legacy_obj = result_json.get_object(key5).unwrap_unchecked();
-        let followers_count = legacy_obj.get_number(key6).unwrap_unchecked();
-
-        (screen_name, followers_count)
+        (base_ccy, inst_id_code)
     }
 
     #[contract_library_method]
