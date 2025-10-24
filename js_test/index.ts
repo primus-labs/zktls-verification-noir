@@ -6,12 +6,13 @@ import { encodePacked, padTo } from "./lib/encoding";
 import { normalizeV } from "./lib/crypto";
 import { AttVerifierContract, SuccessEvent } from "./bindings/AttVerifier.js";
 import { getInitialTestAccountsData } from "@aztec/accounts/testing";
-import { createAztecNodeClient } from "@aztec/aztec.js";
 import { TestWallet } from "@aztec/test-wallet/server";
 import { createStore } from "@aztec/kv-store/lmdb";
 import { createPXE, getPXEConfig, PXE } from "@aztec/pxe/server";
 import { BusinessProgramContract } from "./bindings/BusinessProgram.js";
 import { performance } from "perf_hooks"; 
+import { createAztecNodeClient } from "@aztec/aztec.js";
+
 const node = createAztecNodeClient("http://localhost:8080");
 const l1Contracts = await node.getL1ContractAddresses();
 
@@ -35,18 +36,20 @@ let bob = await wallet.createSchnorrAccount(bobAccount.secret, bobAccount.salt);
 const businessProgram = await BusinessProgramContract.deploy(wallet)
     .send({ from: aliceAccount.address }) // testAccount has fee juice and is registered in the deployer_wallet
     .deployed();
+    console.log("deployed businessprogram");
 // deploy attVerifierContract
 const attVerifierContract = await AttVerifierContract.deploy(wallet).send({ from: aliceAccount.address })
   .deployed();
+  console.log("deployed attverifier");
 
 // load attestation testdata
-const obj = JSON.parse(fs.readFileSync("testdata/attestation_data.json", "utf-8"));
+const obj = JSON.parse(fs.readFileSync("testdata/attestation_data_hash.json", "utf-8"));
 
 // pack data
-const packedArr = encodePacked(obj.public_data);
+const packedArr = encodePacked(obj.public_data[0].attestation);
 
 // signature is 65 bytes (r||s||v)
-const sigHex = obj.public_data.signatures[0].slice(2);
+const sigHex = obj.public_data[0].signature.slice(2);
 const sigBytes = Buffer.from(sigHex, "hex");
 
 // extract r, s, v
@@ -72,79 +75,48 @@ const public_key_x = Array.from(pubBytes.slice(1, 33));
 const public_key_y = Array.from(pubBytes.slice(33, 65));
 
 // request_url
-const urlStr: string = obj.public_data.request.url;
-const urlBytes = Array.from(new TextEncoder().encode(urlStr));
+const urlStr0: string = obj.public_data[0].attestation.request[0].url;
+const urlStr1: string = obj.public_data[0].attestation.request[1].url;
+const urlBytes0 = Array.from(new TextEncoder().encode(urlStr0));
+const urlBytes1 = Array.from(new TextEncoder().encode(urlStr1));
 
 // for allowed urls
-const url2_bytes = Array.from(new TextEncoder().encode("https://github.com"));
+const url_extra_bytes = Array.from(new TextEncoder().encode("https://github.com"));
 
-const allowedUrls = [urlBytes, url2_bytes];
+const requestUrls: (bigint | number)[][] = [
+  urlBytes0,
+  urlBytes1
+];
 
-// Get ciphertext data
-const dataObj = JSON.parse(obj.public_data.data);
-const chrc = JSON.parse(dataObj.CompleteHttpResponseCiphertext);
+const allowedUrls = [
+  urlBytes0,
+  urlBytes1,
+  url_extra_bytes
+];
 
-let allCiphertexts: number[][] = [];
-let allNonces: number[][] = [];
-let allJsonBlocks: [number, number][] = [];
+const id = Math.floor(Math.random() * 9999999999);
 
-for (const packet of chrc.packets) {
-  for (const record of packet.records) {
-    const ctBytes = Array.from(Buffer.from(record.ciphertext, "hex"));
-    const nonceBytes = Array.from(Buffer.from(record.nonce, "hex"));
-    allCiphertexts.push(ctBytes);
-    allNonces.push(nonceBytes);
+// Collect all hashes from public_data.attestation.data
+const data_hashes: number[][] = [];
+const attData = JSON.parse(obj.public_data[0].attestation.data);
+for (const [key, value] of Object.entries(attData)) {
+  if (key.startsWith("uuid-") && typeof value === "string" && value.length === 64) {
+    // Convert each 32-byte hex string into an array of bytes
+    const hashBytes = Array.from(Buffer.from(value, "hex"));
+    data_hashes.push(hashBytes);
+  }
+}
 
-    // grab json_block_positions (0 or 1 range in current data)
-    if (record.json_block_positions && record.json_block_positions.length > 0) {
-      const [start, end] = record.json_block_positions[0];
-      allJsonBlocks.push([start, end]);
-    } else {
-      allJsonBlocks.push([0, 0]);
+const plain_json_response: number[][] = [];
+
+if (obj.private_data && Array.isArray(obj.private_data.plain_json_response)) {
+  for (const entry of obj.private_data.plain_json_response) {
+    if (entry.id && entry.content) {
+      const jsonBytes = Array.from(new TextEncoder().encode(entry.content));
+      plain_json_response.push(jsonBytes);
     }
   }
 }
-
-function padArray(arr: number[], target: number): number[] {
-  if (arr.length > target) {
-    throw new Error(`Array too long: ${arr.length} > ${target}`);
-  }
-  return arr.concat(new Array(target - arr.length).fill(0));
-}
-
-const MAX_CT = 4;
-const CT_SLOT_SIZE = 1536;
-const NONCE_SIZE = 12;
-
-let ciphertextsFixed: number[][] = [];
-let ciphertextLengths: number[] = [];
-let noncesFixed: number[][] = [];
-let jsonBlocksFixed: [number, number][] = [];
-
-for (let i = 0; i < MAX_CT; i++) {
-  if (i < allCiphertexts.length) {
-    ciphertextsFixed.push(padArray(allCiphertexts[i], CT_SLOT_SIZE));
-    ciphertextLengths.push(allCiphertexts[i].length);
-    noncesFixed.push(padArray(allNonces[i], NONCE_SIZE));
-    jsonBlocksFixed.push(allJsonBlocks[i] || [0, 0]);
-  } else {
-    ciphertextsFixed.push(new Array(CT_SLOT_SIZE).fill(0));
-    ciphertextLengths.push(0);
-    noncesFixed.push(new Array(NONCE_SIZE).fill(0));
-    jsonBlocksFixed.push([0, 0]);
-  }
-}
-
-const number_of_ciphertexts = allCiphertexts.length;
-
-// aes_key from test data (16 bytes hex string assumed)
-const aes_key = padArray(Array.from(Buffer.from(obj.private_data.aes_key, "hex")), 16);
-
-console.log("nr ciphertexts: ", ciphertextsFixed.length);
-console.log("nr nonces: ", noncesFixed.length);
-console.log("nr json blocks: ", jsonBlocksFixed.length);
-// create random id for this attestation
-const id = Math.floor(Math.random() * 9999999999);
 
 const start = performance.now();
 let result = await attVerifierContract.methods.verify_attestation(
@@ -152,13 +124,10 @@ let result = await attVerifierContract.methods.verify_attestation(
   public_key_y,
   hash,
   signature,
-  urlBytes,
+  requestUrls, 
   allowedUrls,
-  ciphertextsFixed,
-  number_of_ciphertexts,
-  jsonBlocksFixed,
-  noncesFixed,
-  aes_key,
+  data_hashes,
+  plain_json_response,
   businessProgram.address,
   id
 ).send({ from: aliceAccount.address }).wait();
@@ -172,6 +141,10 @@ console.log(`Verification call took ${duration} ms`);
 if (result.status != "success") {
   console.log("verification failed");
 }
+
+
+
+
 // pxe.getNotes
 // const fromBlock = await pxe.getBlockNumber();
 // const logFilter = {

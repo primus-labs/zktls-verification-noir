@@ -1,6 +1,7 @@
 mod aes;
 use dep::aztec::macros::aztec;
-
+use sha256::sha256_var;
+use string_search::{StringBody, StringBody1024, SubString, SubString1024};
 #[aztec]
 pub contract AttVerifier {
 
@@ -24,17 +25,18 @@ pub contract AttVerifier {
         business_logic_address: AztecAddress,
         id: Field,
     }
-    // gatecount 422.020 (versus 1.397.472 previously)
+
+    // Opcode count: 62761, Total gates by opcodes: 538594, Circuit size: 542.041
     #[private]
     fn verify_attestation(
         public_key_x: [u8; 32],
         public_key_y: [u8; 32],
         hash: [u8; 32],
         signature: [u8; 64],
-        request_url: BoundedVec<u8, MAX_URL_LEN>,
-        allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
+        request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
+        allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
         data_hashes: [[u8; 32]; 2],
-        plain_json_response: [BoundedVec<u8, MAX_CONTENT_LEN>; 2],
+        plain_json_response_contents: [BoundedVec<u8, MAX_CONTENT_LEN>; 2],
         business_logic_address: AztecAddress,
         id: Field, // id for this attestation
     ) -> bool {
@@ -42,31 +44,41 @@ pub contract AttVerifier {
         assert(std::ecdsa_secp256k1::verify_signature(public_key_x, public_key_y, signature, hash));
 
         // 2. Check that the request_url starts with one of the allowed_urls
-        // Safety: Get the index of the url in allowed_urls that matches request_url (unconstrained) and then check it
-        let (found, url_index) = unsafe { get_allowed_url_index(request_url, allowed_urls) };
-        assert(found == true, "No allowed URL matches the request URL");
-        let request_url_haystack: StringBody1024 =
-            StringBody::new(request_url.storage(), request_url.len());
-        let allowed_url = allowed_urls[url_index];
-        let needle: SubString1024 = SubString::new(allowed_url.storage(), allowed_url.len());
+        let mut allowed_url_matches: [BoundedVec<u8, MAX_URL_LEN>; 2] =
+            [BoundedVec::from_array([]); 2];
+        let mut allowed_url_match_index = [0u32; 2];
+        for i in 0..2 {
+            // Safety: Get the index of the url in allowed_urls that matches request_url (unconstrained) and then check it
+            let (found, url_index) =
+                unsafe { get_allowed_url_index(request_urls[i], allowed_urls) };
+            assert(found == true, "No allowed URL matches the request URL");
+            let request_url_haystack: StringBody1024 =
+                StringBody::new(request_urls[i].storage(), request_urls[i].len());
+            let allowed_url = allowed_urls[url_index];
+            let needle: SubString1024 = SubString::new(allowed_url.storage(), allowed_url.len());
 
-        let (result, match_position): (bool, u32) = request_url_haystack.substring_match(needle);
+            let (result, match_position): (bool, u32) =
+                request_url_haystack.substring_match(needle);
 
-        // A match result is only valid if the match position is 0 (i.e., the allowed_url is a prefix of request_url)
-        assert(result & (match_position == 0), "URL check failed");
+            // A match result is only valid if the match position is 0 (i.e., the allowed_url is a prefix of request_url)
+            assert(result & (match_position == 0), "URL check failed");
+            allowed_url_matches[i] = allowed_url;
+            allowed_url_match_index[i] = url_index;
+        }
 
         // 3. Hash plain_json_responses and check with input hashes
         for i in 0..2 {
             let hash = sha256_var(
-                plain_json_response[i].storage(),
-                plain_json_response[i].len() as u64,
+                plain_json_response_contents[i].storage(),
+                plain_json_response_contents[i].len() as u64,
             );
             assert(hash == data_hashes[i]);
         }
 
-        let result = BusinessProgram::at(business_logic_address).verify(plain_json_response).call(
-            &mut context,
-        );
+        let result = BusinessProgram::at(business_logic_address)
+            .verify(plain_json_response_contents, allowed_url_matches, allowed_url_match_index)
+            .call(&mut context);
+
         // TODO emit public event
         // if result {
         //     AttVerifier::at(context.this_address())
@@ -78,103 +90,40 @@ pub contract AttVerifier {
         //         )
         //         .enqueue(&mut context);
         // }
+
         result
     }
 
-    #[public]
-    #[internal]
-    fn _emit_success_event(
-        sender: AztecAddress,
-        att_verifier_address: AztecAddress,
-        business_logic_address: AztecAddress,
-        id: Field,
-    ) {
-        emit_event_in_public(
-            SuccessEvent { sender, att_verifier_address, business_logic_address, id },
-            &mut context,
-        );
-    }
-
-    #[contract_library_method]
-    unconstrained fn extract_json(
-        plaintext: [u8; 6144],
-        number_of_ciphertexts: u32,
-        json_blocks: [[u32; 2]; 4],
-    ) -> BoundedVec<u8, 4096> {
-        let mut json_bytes: BoundedVec<u8, 4096> = BoundedVec::new();
-
-        for i in 0..4 {
-            if i < number_of_ciphertexts {
-                let start = json_blocks[i][0];
-                let end = json_blocks[i][1];
-
-                if end > start {
-                    for j in 0..1536 {
-                        if j >= start & j <= end {
-                            json_bytes.push(plaintext[i * 1536 + j]);
-                        }
-                    }
-                }
-            }
-        }
-        json_bytes
-    }
-
-    #[contract_library_method]
-    fn verify_extracted_json(
-        plaintext: [u8; 6144],
-        extracted_json: BoundedVec<u8, 4096>,
-        json_blocks: [[u32; 2]; 4],
-    ) {
-        let mut offset = 0u32;
-        for i in 0..json_blocks.len() {
-            let start = json_blocks[i][0];
-            let end = json_blocks[i][1];
-
-            for j in 0..1536 {
-                if j >= start & j <= end & start > end {
-                    assert(plaintext[i * 1536 + j] == extracted_json.get(offset));
-                    offset += 1;
-                }
-            }
-        }
-    }
-
-    #[contract_library_method]
-    fn decrypt_full(
-        ciphertexts: [[u8; 1536]; 4], // empty ciphertexts should be padded with 0
-        number_of_ciphertexts: u32,
-        nonce: [[u8; 12]; 4],
-        aes_key: [u8; 16],
-    ) -> [u8; 6144] {
-        let mut plaintexts: [u8; 6144] = [0u8; 6144];
-        for i in 0..4 {
-            if i < number_of_ciphertexts {
-                // decrypt entire 1536-byte ciphertext in one go
-                let pt = aes_decrypt_slot1536(aes_key, nonce[i], ciphertexts[i]);
-                for j in 0..1536 {
-                    plaintexts[i * 1536 + j] = pt[j];
-                }
-            }
-        }
-        plaintexts
-    }
+    // #[internal("public")]
+    // fn _emit_success_event(
+    //     sender: AztecAddress,
+    //     att_verifier_address: AztecAddress,
+    //     business_logic_address: AztecAddress,
+    //     id: Field,
+    // ) {
+    //     emit_event_in_public(
+    //         SuccessEvent { sender, att_verifier_address, business_logic_address, id },
+    //         &mut context,
+    //     );
+    // }
 
     #[contract_library_method]
     unconstrained fn get_allowed_url_index(
         request_url: BoundedVec<u8, MAX_URL_LEN>,
-        allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 2], // TODO this probably shouldn't have a fixed len
+        allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3], // TODO this probably shouldn't have a fixed len
     ) -> (bool, u32) {
         let mut found = false;
         let mut index: u32 = 3050913689; // max u32 value to indicate "not found"
         for i in 0..allowed_urls.len() {
             let allowed_url = allowed_urls[i];
-            let (result, match_position) = search(request_url, allowed_url);
-            // If a valid result was already found we don't have to store again
-            // (A valid result being that the match position is 0)
-            if result & (match_position == 0) & !found {
-                found = true;
-                index = i;
+            if (allowed_url.len() <= request_url.len()) {
+                let (result, match_position) = search(request_url, allowed_url);
+                // If a valid result was already found we don't have to store again
+                // (A valid result being that the match position is 0)
+                if result & (match_position == 0) & !found {
+                    found = true;
+                    index = i;
+                }
             }
         }
         (found, index)
