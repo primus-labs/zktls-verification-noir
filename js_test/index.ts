@@ -12,13 +12,14 @@ import { createPXE, getPXEConfig, PXE } from "@aztec/pxe/server";
 import { BusinessProgramContract } from "./bindings/BusinessProgram.js";
 import { performance } from "perf_hooks"; 
 import { createAztecNodeClient } from "@aztec/aztec.js";
+import { Barretenberg, Fr } from "@aztec/bb.js";
 
 const node = createAztecNodeClient("http://localhost:8080");
 const l1Contracts = await node.getL1ContractAddresses();
 
 const config = getPXEConfig();
 const fullConfig = { ...config, l1Contracts };
-fullConfig.proverEnabled = false; // you'll want to set this to "true" once you're ready to connect to the testnet
+fullConfig.proverEnabled = true;
 
 const store = await createStore("pxe", {
   dataDirectory: "store",
@@ -117,6 +118,26 @@ if (obj.private_data && Array.isArray(obj.private_data.plain_json_response)) {
     }
   }
 }
+
+const bb = await Barretenberg.new();
+const hashedUrls: bigint[] = [];
+
+for (const url of allowedUrls) {
+  // pad with zeros to length 1024
+  while (url.length < 1024) {
+    url.push(0);
+  }
+
+  const frArray = url.map(b => new Fr(BigInt(b)));
+  const hashFr = await bb.poseidon2Hash(frArray);
+  const hashBigInt = BigInt(hashFr.toString());
+  hashedUrls.push(hashBigInt);
+}
+// Initialize public storage with hashed allowed urls
+let initialized_res = await businessProgram.methods
+  .initialize_public_immutable(hashedUrls)
+  .send({ from: aliceAccount.address }).wait();
+console.log(initialized_res);
 
 const start = performance.now();
 let result = await attVerifierContract.methods.verify_attestation(

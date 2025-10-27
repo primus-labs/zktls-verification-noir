@@ -2,6 +2,7 @@ mod aes;
 use dep::aztec::macros::aztec;
 use sha256::sha256_var;
 use string_search::{StringBody, StringBody1024, SubString, SubString1024};
+
 #[aztec]
 pub contract AttVerifier {
 
@@ -9,11 +10,12 @@ pub contract AttVerifier {
     use aztec::{
         event::event_emission::emit_event_in_public,
         macros::{events::event, functions::{internal, private, public}},
-        protocol_types::address::AztecAddress,
+        protocol_types::{address::AztecAddress, hash::poseidon2_hash},
     };
     use business_program::BusinessProgram;
     use sha256::sha256_var;
     use string_search::{StringBody, StringBody1024, SubString, SubString1024};
+
     global MAX_URL_LEN: u32 = 1024;
     global MAX_CONTENT_LEN: u32 = 1000;
 
@@ -44,8 +46,7 @@ pub contract AttVerifier {
         assert(std::ecdsa_secp256k1::verify_signature(public_key_x, public_key_y, signature, hash));
 
         // 2. Check that the request_url starts with one of the allowed_urls
-        let mut allowed_url_matches: [BoundedVec<u8, MAX_URL_LEN>; 2] =
-            [BoundedVec::from_array([]); 2];
+        let mut allowed_url_matches: [Field; 2] = [0; 2];
         let mut allowed_url_match_index = [0u32; 2];
         for i in 0..2 {
             // Safety: Get the index of the url in allowed_urls that matches request_url (unconstrained) and then check it
@@ -62,8 +63,14 @@ pub contract AttVerifier {
 
             // A match result is only valid if the match position is 0 (i.e., the allowed_url is a prefix of request_url)
             assert(result & (match_position == 0), "URL check failed");
-            allowed_url_matches[i] = allowed_url;
-            allowed_url_match_index[i] = url_index;
+            let mut hash_input: [Field; 1024] = [0; 1024];
+            for j in 0..1024 {
+                if j < allowed_url.len() {
+                    hash_input[j] = allowed_url.storage()[j] as Field;
+                }
+            }
+            // TODO can we hash without the padding of zeroes?
+            allowed_url_matches[i] = poseidon2_hash::<1024>(hash_input);
         }
 
         // 3. Hash plain_json_responses and check with input hashes
@@ -76,7 +83,7 @@ pub contract AttVerifier {
         }
 
         let result = BusinessProgram::at(business_logic_address)
-            .verify(plain_json_response_contents, allowed_url_matches, allowed_url_match_index)
+            .verify(plain_json_response_contents, allowed_url_matches)
             .call(&mut context);
 
         // TODO emit public event

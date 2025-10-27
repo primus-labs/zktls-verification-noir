@@ -5,6 +5,7 @@ pub contract BusinessProgram {
     use dep::json_parser::JSON2kb;
     use aztec::macros::functions::{private, public};
     use aztec::macros::storage::storage;
+    use aztec::protocol_types::hash::poseidon2_hash;
     use aztec::state_vars::public_immutable::PublicImmutable;
 
     global MAX_URL_LEN: u32 = 1024;
@@ -13,13 +14,12 @@ pub contract BusinessProgram {
     #[storage]
     struct Storage<Context> {
         // TODO is it preferred this is mutable?
-        // This should contain the allowed_urls padded by 0
-        allowed_urls: PublicImmutable<[[u8; MAX_URL_LEN]; 3], Context>,
+        allowed_url_hashes: PublicImmutable<[Field; 3], Context>,
     }
 
     #[public]
-    fn initialize_public_immutable(urls: [[u8; MAX_URL_LEN]; 3]) {
-        storage.allowed_urls.initialize(urls);
+    fn initialize_public_immutable(allowed_url_hashes: [Field; 3]) {
+        storage.allowed_url_hashes.initialize(allowed_url_hashes);
     }
 
     // gatecount 222.973 (versus 476.199), but note there are no assertions done on the values
@@ -29,8 +29,7 @@ pub contract BusinessProgram {
     #[private]
     fn verify(
         plain_json_response: [BoundedVec<u8, MAX_CONTENT_LEN>; 2],
-        allowed_url_matches: [BoundedVec<u8, MAX_URL_LEN>; 2],
-        allowed_url_match_index: [u32; 2],
+        allowed_url_matches_hashes: [Field; 2],
     ) -> bool {
         // Each of the plaintexts must be parsed to json
         for i in 0..2 {
@@ -40,23 +39,22 @@ pub contract BusinessProgram {
             // TODO what to assert about base_ccy and inst_id_code
         }
 
-        // BusinessProgram::at(context.this_address())
-        //     .check_allowed_url(allowed_url, allowed_url_index)
-        //     .enqueue(&mut context);
-        // Public immutable values can be read in private functions
-        // ref https://docs.aztec.network/nightly/developers/docs/guides/smart_contracts/how_to_define_storage#read-1
-        // let urls: [[u8; MAX_URL_LEN]; 2] = storage.allowed_urls.read();
+        // Check that all the allowed_url hashes that were used are indeed valid wrt the public storage
+        let allowed_url_hashes: [Field; 3] = storage.allowed_url_hashes.read();
+        for i in 0..2 {
+            let check_hash = allowed_url_matches_hashes[i];
+            let mut found = false;
+            for j in 0..3 {
+                if allowed_url_hashes[j] == check_hash {
+                    found = true;
+                }
+            }
+            assert(found);
+        }
         // assert(urls[allowed_url_index] == allowed_url);
 
         true
     }
-    // The addition of this function causes the error "Stack frame too deep"
-    // #[public]
-    // #[internal]
-    // fn check_allowed_url(allowed_url: [u8; MAX_URL_LEN], allowed_url_index: u32) {
-    //     let urls: [[u8; MAX_URL_LEN]; 2] = storage.allowed_urls.read();
-    //     assert(urls[allowed_url_index] == allowed_url);
-    // }
 
     #[contract_library_method]
     fn get_values(plaintext: BoundedVec<u8, MAX_CONTENT_LEN>) -> (BoundedVec<u8, 5>, u64) {
