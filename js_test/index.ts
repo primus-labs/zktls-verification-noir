@@ -10,7 +10,7 @@ import { TestWallet } from "@aztec/test-wallet/server";
 import { createStore } from "@aztec/kv-store/lmdb";
 import { createPXE, getPXEConfig, PXE } from "@aztec/pxe/server";
 import { BusinessProgramContract } from "./bindings/BusinessProgram.js";
-import { performance } from "perf_hooks"; 
+import { performance } from "perf_hooks";
 import { createAztecNodeClient } from "@aztec/aztec.js";
 import { Barretenberg, Fr } from "@aztec/bb.js";
 
@@ -33,15 +33,11 @@ const [aliceAccount, bobAccount] = await getInitialTestAccountsData();
 let alice = await wallet.createSchnorrAccount(aliceAccount.secret, aliceAccount.salt);
 let bob = await wallet.createSchnorrAccount(bobAccount.secret, bobAccount.salt);
 
-// deploy business program
-const businessProgram = await BusinessProgramContract.deploy(wallet)
-    .send({ from: aliceAccount.address }) // testAccount has fee juice and is registered in the deployer_wallet
-    .deployed();
-    console.log("deployed businessprogram");
+
 // deploy attVerifierContract
 const attVerifierContract = await AttVerifierContract.deploy(wallet).send({ from: aliceAccount.address })
   .deployed();
-  console.log("deployed attverifier");
+console.log("deployed attverifier");
 
 // load attestation testdata
 const obj = JSON.parse(fs.readFileSync("testdata/attestation_data_hash.json", "utf-8"));
@@ -133,11 +129,12 @@ for (const url of allowedUrls) {
   const hashBigInt = BigInt(hashFr.toString());
   hashedUrls.push(hashBigInt);
 }
-// Initialize public storage with hashed allowed urls
-let initialized_res = await businessProgram.methods
-  .initialize_public_immutable(hashedUrls)
-  .send({ from: aliceAccount.address }).wait();
-console.log(initialized_res);
+
+// deploy business program
+const businessProgram = await BusinessProgramContract.deploy(wallet, alice.address, hashedUrls)
+  .send({ from: aliceAccount.address }) // testAccount has fee juice and is registered in the deployer_wallet
+  .deployed();
+console.log("deployed business program");
 
 const start = performance.now();
 let result = await attVerifierContract.methods.verify_attestation(
@@ -145,7 +142,7 @@ let result = await attVerifierContract.methods.verify_attestation(
   public_key_y,
   hash,
   signature,
-  requestUrls, 
+  requestUrls,
   allowedUrls,
   data_hashes,
   plain_json_response,
@@ -162,6 +159,52 @@ console.log(`Verification call took ${duration} ms`);
 if (result.status != "success") {
   console.log("verification failed");
 }
+
+// update url to only https://github.com
+const new_hashedUrls: bigint[] = [];
+// pad with zeros to length 1024
+const github_url = allowedUrls[2];
+while (github_url.length < 1024) {
+  github_url.push(0);
+}
+const frArray = github_url.map(b => new Fr(BigInt(b)));
+const hashFr = await bb.poseidon2Hash(frArray);
+const hashBigInt = BigInt(hashFr.toString());
+new_hashedUrls.push(hashBigInt);
+new_hashedUrls.push(hashBigInt);
+new_hashedUrls.push(hashBigInt);
+
+// Bob shouldn't be able to update the urls
+try {
+  result = await businessProgram.methods.update_allowed_url_hashes(new_hashedUrls).send({ from: bobAccount.address }).wait();
+  console.log("Error: Bob update the urls");
+} catch (error: unknown) {
+  console.log("Admin verification succeed")
+}
+// Alice (admin) updated the urls to only github.com
+result = await businessProgram.methods.update_allowed_url_hashes(new_hashedUrls).send({ from: aliceAccount.address }).wait();
+console.log(result);
+console.log("Alice updated the urls");
+
+try {
+  result = await attVerifierContract.methods.verify_attestation(
+    public_key_x,
+    public_key_y,
+    hash,
+    signature,
+    requestUrls,
+    allowedUrls,
+    data_hashes,
+    plain_json_response,
+    businessProgram.address,
+    id
+  ).send({ from: aliceAccount.address }).wait();
+  console.log("url update failed")
+} catch {
+  console.log("url update succeed")
+}
+
+
 
 
 
