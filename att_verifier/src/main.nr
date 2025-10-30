@@ -1,12 +1,9 @@
 mod aes;
 use dep::aztec::macros::aztec;
-use sha256::sha256_var;
-use string_search::{StringBody, StringBody1024, SubString, SubString1024};
 
 #[aztec]
 pub contract AttVerifier {
 
-    use crate::aes::aes_decrypt_slot1536;
     use aztec::{
         event::event_emission::emit_event_in_public,
         macros::{events::event, functions::{internal, private, public}},
@@ -28,7 +25,7 @@ pub contract AttVerifier {
         id: Field,
     }
 
-    // Opcode count: 62761, Total gates by opcodes: 538594, Circuit size: 542.041
+    // Opcode count: 71055, Total gates by opcodes: 546716, Circuit size: 550.167
     #[private]
     fn verify_attestation(
         public_key_x: [u8; 32],
@@ -47,7 +44,6 @@ pub contract AttVerifier {
 
         // 2. Check that the request_url starts with one of the allowed_urls
         let mut allowed_url_matches: [Field; 2] = [0; 2];
-        let mut allowed_url_match_index = [0u32; 2];
         for i in 0..2 {
             // Safety: Get the index of the url in allowed_urls that matches request_url (unconstrained) and then check it
             let (found, url_index) =
@@ -86,33 +82,33 @@ pub contract AttVerifier {
             .verify(plain_json_response_contents, allowed_url_matches)
             .call(&mut context);
 
-        // TODO emit public event
-        // if result {
-        //     AttVerifier::at(context.this_address())
-        //         ._emit_success_event(
-        //             context.msg_sender().unwrap(),
-        //             context.this_address(),
-        //             business_logic_address,
-        //             id,
-        //         )
-        //         .enqueue(&mut context);
-        // }
+        if result {
+            AttVerifier::at(context.this_address())
+                ._emit_success_event(
+                    context.msg_sender().unwrap(),
+                    context.this_address(),
+                    business_logic_address,
+                    id,
+                )
+                .enqueue(&mut context);
+        }
 
         result
     }
 
-    // #[internal("public")]
-    // fn _emit_success_event(
-    //     sender: AztecAddress,
-    //     att_verifier_address: AztecAddress,
-    //     business_logic_address: AztecAddress,
-    //     id: Field,
-    // ) {
-    //     emit_event_in_public(
-    //         SuccessEvent { sender, att_verifier_address, business_logic_address, id },
-    //         &mut context,
-    //     );
-    // }
+    #[public]
+    #[internal]
+    fn _emit_success_event(
+        sender: AztecAddress,
+        att_verifier_address: AztecAddress,
+        business_logic_address: AztecAddress,
+        id: Field,
+    ) {
+        emit_event_in_public(
+            SuccessEvent { sender, att_verifier_address, business_logic_address, id },
+            &mut context,
+        );
+    }
 
     #[contract_library_method]
     unconstrained fn get_allowed_url_index(

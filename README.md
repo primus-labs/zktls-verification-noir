@@ -42,7 +42,7 @@ This version of the sandbox contains fixes that allows the analysis via [flamegr
 ## QuickStart
 1. Start an Aztec sandbox 
 ```
-aztec start --sandbox
+PXE_PROVER_ENABLED=1 aztec start --sandbox
 ```
 2. compile att_verifier and real_business_program
 ```
@@ -150,10 +150,10 @@ Calling `verify_attestation` in the ts script using a local Sandbox takes ~10s.
 
 `AttVerifier.verify`:
 
-Opcode count: 225511, Total gates by opcodes: 1391540, Circuit size: 1397472
+Opcode count: 71055, Total gates by opcodes: 546716, Circuit size: 550167
 
 `BusinessProgram.verify`:
 
-Opcode count: 259042, Total gates by opcodes: 463853, Circuit size: 476199
+Opcode count: 190939, Total gates by opcodes: 346369, Circuit size: 356400
 
 For flamegraphs of both functions, see `att_verifier-AttVerifier-verify_attestation-flamegraph.svg` and `real_business_program-BusinessProgram-verify-flamegraph.svg`. Note that these can be obtained following [these steps](https://docs.aztec.network/nightly/developers/docs/guides/smart_contracts/advanced/writing_efficient_contracts#inspecting-with-flamegraph). 
