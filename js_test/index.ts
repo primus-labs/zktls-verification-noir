@@ -11,7 +11,7 @@ import { createStore } from "@aztec/kv-store/lmdb";
 import { createPXE, getPXEConfig, PXE } from "@aztec/pxe/server";
 import { BusinessProgramContract } from "./bindings/BusinessProgram.js";
 import { performance } from "perf_hooks";
-import { createAztecNodeClient } from "@aztec/aztec.js";
+import { createAztecNodeClient, getDecodedPublicEvents } from "@aztec/aztec.js";
 import { Barretenberg, Fr } from "@aztec/bb.js";
 
 const node = createAztecNodeClient("http://localhost:8080");
@@ -160,6 +160,14 @@ if (result.status != "success") {
   console.log("verification failed");
 }
 
+const success_event = await getDecodedPublicEvents<SuccessEvent>(
+  node,
+  AttVerifierContract.events.SuccessEvent,
+  result.blockNumber!,
+  2
+);
+console.log("Get success event: ", success_event);
+
 // update url to only https://github.com
 const new_hashedUrls: bigint[] = [];
 // pad with zeros to length 1024
@@ -203,24 +211,3 @@ try {
 } catch {
   console.log("url update succeed")
 }
-
-
-
-
-
-
-// pxe.getNotes
-// const fromBlock = await pxe.getBlockNumber();
-// const logFilter = {
-//   fromBlock,
-//   toBlock: fromBlock + 1,
-// };
-// const publicLogs = (await pxe.getPublicLogs(logFilter)).logs;
-// // const publicLogs = (await pxe.getPublicEvents(AttVerifierContract.events.SuccessEvent, result.blockNumber as number, result.blockNumber as number));
-// for (const log of publicLogs) {
-//   if ((log as SuccessEvent).id == id) {
-//     console.log("Verification success");
-//     console.log(log)
-//   }
-
-// }
