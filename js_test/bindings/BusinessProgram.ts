@@ -41,16 +41,16 @@ export const BusinessProgramContractArtifact = loadContractArtifact(BusinessProg
  * Type-safe interface for contract BusinessProgram;
  */
 export class BusinessProgramContract extends ContractBase {
-  
+
   private constructor(
     instance: ContractInstanceWithAddress,
     wallet: Wallet,
   ) {
     super(instance, BusinessProgramContractArtifact, wallet);
   }
-  
 
-  
+
+
   /**
    * Creates a contract instance.
    * @param address - The deployed contract's address.
@@ -64,7 +64,7 @@ export class BusinessProgramContract extends ContractBase {
     return Contract.at(address, BusinessProgramContract.artifact, wallet) as Promise<BusinessProgramContract>;
   }
 
-  
+
   /**
    * Creates a tx to deploy a new instance of this contract.
    */
@@ -95,9 +95,9 @@ export class BusinessProgramContract extends ContractBase {
       opts.method ?? 'constructor',
     );
   }
-  
 
-  
+
+
   /**
    * Returns this contract's artifact.
    */
@@ -111,23 +111,23 @@ export class BusinessProgramContract extends ContractBase {
   public static get artifactForPublic(): ContractArtifact {
     return loadContractArtifactForPublic(BusinessProgramContractArtifactJson as NoirCompiledContract);
   }
-  
+
 
   public static get storage(): ContractStorageLayout<'admin' | 'allowed_url_hashes'> {
-      return {
-        admin: {
-      slot: new Fr(1n),
-    },
-allowed_url_hashes: {
-      slot: new Fr(2n),
-    }
-      } as ContractStorageLayout<'admin' | 'allowed_url_hashes'>;
-    }
-    
+    return {
+      admin: {
+        slot: new Fr(1n),
+      },
+      allowed_url_hashes: {
+        slot: new Fr(2n),
+      }
+    } as ContractStorageLayout<'admin' | 'allowed_url_hashes'>;
+  }
+
 
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public declare methods: {
-    
+
     /** check_allowed_url(allowed_url_matches_hashes: array) */
     check_allowed_url: ((allowed_url_matches_hashes: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
@@ -153,5 +153,5 @@ allowed_url_hashes: {
     verify: ((plain_json_response: (bigint | number)[][], allowed_url_matches_hashes: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
   };
 
-  
+
 }

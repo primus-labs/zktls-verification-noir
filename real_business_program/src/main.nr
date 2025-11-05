@@ -78,27 +78,42 @@ pub contract BusinessProgram {
     }
 
     #[contract_library_method]
-    fn get_values(plaintext: BoundedVec<u8, MAX_CONTENT_LEN>) -> (BoundedVec<u8, 5>, u64) {
+    fn get_values(plaintext: BoundedVec<u8, MAX_CONTENT_LEN>) -> (u64, BoundedVec<u8, 10>) {
         // TODO is this needed?
         // // Safety: first sanitize the plaintext to ensure it is valid ASCII, then check this was done correctly
         // let sanitized = unsafe { sanitize_ascii(plaintext) };
         // // Uncommenting this check fails compilation
         // verify_sanitized_ascii(plaintext, sanitized);
 
+        
         let json = JSON2kb::parse_bounded_vec_json(plaintext);
 
-        let key0: BoundedVec<u8, 4> = BoundedVec::from_array("data".as_bytes());
+        // for attestation_data_hash.json
+        // let key0: BoundedVec<u8, 4> = BoundedVec::from_array("data".as_bytes());
 
-        let data_array = json.get_array(key0).unwrap();
-        let first_item: JSON2kb = data_array.get_object_from_array(0).unwrap();
+        // let data_array = json.get_array(key0).unwrap();
+        // let first_item: JSON2kb = data_array.get_object_from_array(0).unwrap();
 
-        let key1: BoundedVec<u8, 7> = BoundedVec::from_array("baseCcy".as_bytes());
-        let base_ccy: BoundedVec<u8, 5> = first_item.get_string_from_path([key1]).unwrap();
+        // let key1: BoundedVec<u8, 7> = BoundedVec::from_array("baseCcy".as_bytes());
+        // let base_ccy: BoundedVec<u8, 5> = first_item.get_string_from_path([key1]).unwrap();
 
-        let key2: BoundedVec<u8, 10> = BoundedVec::from_array("instIdCode".as_bytes());
-        let inst_id_code: u64 = first_item.get_number(key2).unwrap();
+        // let key2: BoundedVec<u8, 10> = BoundedVec::from_array("instIdCode".as_bytes());
+        // let inst_id_code: u64 = first_item.get_number(key2).unwrap();
 
-        (base_ccy, inst_id_code)
+        // (base_ccy, inst_id_code)
+
+        // for eth_hash.json
+        let key0: BoundedVec<u8, 15> = BoundedVec::from_array("makerCommission".as_bytes());
+        let maker_commission = json.get_number(key0).unwrap();
+
+        let key1: BoundedVec<u8, 15> = BoundedVec::from_array("commissionRates".as_bytes());
+        let commission_rate_obj: JSON2kb = json.get_object(key1).unwrap();
+
+        let key2: BoundedVec<u8, 5> = BoundedVec::from_array("maker".as_bytes());
+        let maker_rate_str: BoundedVec<u8, 10> = commission_rate_obj.get_string_from_path([key2]).unwrap();
+        (maker_commission, maker_rate_str)
+
+
     }
 
     #[contract_library_method]

@@ -13,6 +13,12 @@ import { BusinessProgramContract } from "./bindings/BusinessProgram.js";
 import { performance } from "perf_hooks";
 import { createAztecNodeClient, getDecodedPublicEvents } from "@aztec/aztec.js";
 import { Barretenberg, Fr } from "@aztec/bb.js";
+import { url } from "inspector";
+
+const MAX_RESPONSE_NUM = 2;
+// NOTE - currently allowed url only supports host name
+const AllOWED_URL = ["https://api.binance.com", "https://www.okx.com", "https://x.com"];
+const ATT_PATH = "testdata/eth_hash.json";
 
 const node = createAztecNodeClient("http://localhost:8080");
 const l1Contracts = await node.getL1ContractAddresses();
@@ -40,7 +46,7 @@ const attVerifierContract = await AttVerifierContract.deploy(wallet).send({ from
 console.log("deployed attverifier");
 
 // load attestation testdata
-const obj = JSON.parse(fs.readFileSync("testdata/attestation_data_hash.json", "utf-8"));
+const obj = JSON.parse(fs.readFileSync(ATT_PATH, "utf-8"));
 
 // pack data
 const packedArr = encodePacked(obj.public_data[0].attestation);
@@ -72,24 +78,32 @@ const public_key_x = Array.from(pubBytes.slice(1, 33));
 const public_key_y = Array.from(pubBytes.slice(33, 65));
 
 // request_url
-const urlStr0: string = obj.public_data[0].attestation.request[0].url;
-const urlStr1: string = obj.public_data[0].attestation.request[1].url;
-const urlBytes0 = Array.from(new TextEncoder().encode(urlStr0));
-const urlBytes1 = Array.from(new TextEncoder().encode(urlStr1));
+// check if request num > MAX_RESPONSE_NUM
+if (obj.public_data[0].attestation.request.length > MAX_RESPONSE_NUM) {
+  throw new Error(`request length (${obj.public_data[0].attestation.request.length}) > MAX_RESPONSE_NUM (${MAX_RESPONSE_NUM})`)
+}
+const requestUrls: (bigint | number)[][] = [];
+for (const req of obj.public_data[0].attestation.request) {
+  const fullUrl = new URL(req.url);
+  const urlBytes = Array.from(new TextEncoder().encode(fullUrl.origin));
 
-// for allowed urls
-const url_extra_bytes = Array.from(new TextEncoder().encode("https://github.com"));
+  requestUrls.push(urlBytes)
+}
 
-const requestUrls: (bigint | number)[][] = [
-  urlBytes0,
-  urlBytes1
-];
+// repeat the last element till MAX_RESPONSE_NUM 
+const diff = MAX_RESPONSE_NUM - requestUrls.length;
+for (let i = 0; i < diff; i++) {
+  requestUrls.push(requestUrls.at(-1) as number[]);
+}
 
-const allowedUrls = [
-  urlBytes0,
-  urlBytes1,
-  url_extra_bytes
-];
+// allowed urls
+const allowedUrls: (bigint | number)[][] = [];
+for (const url of AllOWED_URL) {
+  const url_bytes = Array.from(new TextEncoder().encode(url));
+  allowedUrls.push(url_bytes)
+}
+
+
 
 const id = Math.floor(Math.random() * 9999999999);
 
@@ -97,11 +111,23 @@ const id = Math.floor(Math.random() * 9999999999);
 const data_hashes: number[][] = [];
 const attData = JSON.parse(obj.public_data[0].attestation.data);
 for (const [key, value] of Object.entries(attData)) {
+  // for attestation_data_hash.json
   if (key.startsWith("uuid-") && typeof value === "string" && value.length === 64) {
     // Convert each 32-byte hex string into an array of bytes
     const hashBytes = Array.from(Buffer.from(value, "hex"));
     data_hashes.push(hashBytes);
   }
+  // for eth_hash.json
+  if (key.startsWith("hash-of-response") && typeof value === "string" && value.length === 64) {
+    // Convert each 32-byte hex string into an array of bytes
+    const hashBytes = Array.from(Buffer.from(value, "hex"));
+    data_hashes.push(hashBytes);
+  }
+}
+// repeat the last element of data_hashes till MAX_RESPONSE_NUM 
+const data_diff = MAX_RESPONSE_NUM - data_hashes.length;
+for (let i = 0; i < data_diff; i++) {
+  data_hashes.push(data_hashes.at(-1) as number[]);
 }
 
 const plain_json_response: number[][] = [];
@@ -114,11 +140,17 @@ if (obj.private_data && Array.isArray(obj.private_data.plain_json_response)) {
     }
   }
 }
+// repeat the last element of plain_json_response till MAX_RESPONSE_NUM 
+const plain_json_diff = MAX_RESPONSE_NUM - plain_json_response.length;
+for (let i = 0; i < plain_json_diff; i++) {
+  plain_json_response.push(plain_json_response.at(-1) as number[]);
+}
 
 const bb = await Barretenberg.new();
 const hashedUrls: bigint[] = [];
 
-for (const url of allowedUrls) {
+for (let url of allowedUrls) {
+  url = url.slice();
   // pad with zeros to length 1024
   while (url.length < 1024) {
     url.push(0);
