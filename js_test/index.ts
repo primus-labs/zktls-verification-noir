@@ -16,7 +16,6 @@ import { Barretenberg, Fr } from "@aztec/bb.js";
 import { url } from "inspector";
 
 const MAX_RESPONSE_NUM = 2;
-// NOTE - currently allowed url only supports host name
 const AllOWED_URL = ["https://api.binance.com", "https://www.okx.com", "https://x.com"];
 const ATT_PATH = "testdata/eth_hash.json";
 
@@ -84,9 +83,7 @@ if (obj.public_data[0].attestation.request.length > MAX_RESPONSE_NUM) {
 }
 const requestUrls: (bigint | number)[][] = [];
 for (const req of obj.public_data[0].attestation.request) {
-  const fullUrl = new URL(req.url);
-  const urlBytes = Array.from(new TextEncoder().encode(fullUrl.origin));
-
+  const urlBytes = Array.from(new TextEncoder().encode(req.url));
   requestUrls.push(urlBytes)
 }
 
