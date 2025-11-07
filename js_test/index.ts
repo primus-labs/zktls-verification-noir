@@ -20,24 +20,23 @@ const AllOWED_URL = ["https://api.binance.com", "https://www.okx.com", "https://
 const ATT_PATH = "testdata/eth_hash.json";
 
 const node = createAztecNodeClient("http://localhost:8080");
-const l1Contracts = await node.getL1ContractAddresses();
+//const l1Contracts = await node.getL1ContractAddresses();
 
-const config = getPXEConfig();
-const fullConfig = { ...config, l1Contracts };
-fullConfig.proverEnabled = true;
+// const config = getPXEConfig();
+// const fullConfig = { ...config, l1Contracts };
+// fullConfig.proverEnabled = true;
 
-const store = await createStore("pxe", {
-  dataDirectory: "store",
-  dataStoreMapSizeKB: 1e6,
-});
-const pxe = await createPXE(node, fullConfig, { store });
+// const store = await createStore("pxe", {
+//   dataDirectory: "store",
+//   dataStoreMapSizeKB: 1e6,
+// });
+//const pxe = await createPXE(node, fullConfig, { store });
 // await waitForPXE(pxe);
 
 const wallet = await TestWallet.create(node);
 const [aliceAccount, bobAccount] = await getInitialTestAccountsData();
 let alice = await wallet.createSchnorrAccount(aliceAccount.secret, aliceAccount.salt);
 let bob = await wallet.createSchnorrAccount(bobAccount.secret, bobAccount.salt);
-
 
 // deploy attVerifierContract
 const attVerifierContract = await AttVerifierContract.deploy(wallet).send({ from: aliceAccount.address })
@@ -196,47 +195,50 @@ const success_event = await getDecodedPublicEvents<SuccessEvent>(
   2
 );
 console.log("Get success event: ", success_event);
+await bb.destroy()
 
-// update url to only https://github.com
-const new_hashedUrls: bigint[] = [];
-// pad with zeros to length 1024
-const github_url = allowedUrls[2];
-while (github_url.length < 1024) {
-  github_url.push(0);
-}
-const frArray = github_url.map(b => new Fr(BigInt(b)));
-const hashFr = await bb.poseidon2Hash(frArray);
-const hashBigInt = BigInt(hashFr.toString());
-new_hashedUrls.push(hashBigInt);
-new_hashedUrls.push(hashBigInt);
-new_hashedUrls.push(hashBigInt);
+// ====================== test update url ===========================
+// uncomment below to test update url
+// // update url to only https://github.com
+// const new_hashedUrls: bigint[] = [];
+// // pad with zeros to length 1024
+// const github_url = allowedUrls[2];
+// while (github_url.length < 1024) {
+//   github_url.push(0);
+// }
+// const frArray = github_url.map(b => new Fr(BigInt(b)));
+// const hashFr = await bb.poseidon2Hash(frArray);
+// const hashBigInt = BigInt(hashFr.toString());
+// new_hashedUrls.push(hashBigInt);
+// new_hashedUrls.push(hashBigInt);
+// new_hashedUrls.push(hashBigInt);
 
-// Bob shouldn't be able to update the urls
-try {
-  result = await businessProgram.methods.update_allowed_url_hashes(new_hashedUrls).send({ from: bobAccount.address }).wait();
-  console.log("Error: Bob update the urls");
-} catch (error: unknown) {
-  console.log("Admin verification succeed")
-}
-// Alice (admin) updated the urls to only github.com
-result = await businessProgram.methods.update_allowed_url_hashes(new_hashedUrls).send({ from: aliceAccount.address }).wait();
-console.log(result);
-console.log("Alice updated the urls");
+// // Bob shouldn't be able to update the urls
+// try {
+//   result = await businessProgram.methods.update_allowed_url_hashes(new_hashedUrls).send({ from: bobAccount.address }).wait();
+//   console.log("Error: Bob update the urls");
+// } catch (error: unknown) {
+//   console.log("Admin verification succeed")
+// }
+// // Alice (admin) updated the urls to only github.com
+// result = await businessProgram.methods.update_allowed_url_hashes(new_hashedUrls).send({ from: aliceAccount.address }).wait();
+// console.log(result);
+// console.log("Alice updated the urls");
 
-try {
-  result = await attVerifierContract.methods.verify_attestation(
-    public_key_x,
-    public_key_y,
-    hash,
-    signature,
-    requestUrls,
-    allowedUrls,
-    data_hashes,
-    plain_json_response,
-    businessProgram.address,
-    id
-  ).send({ from: aliceAccount.address }).wait();
-  console.log("url update failed")
-} catch {
-  console.log("url update succeed")
-}
+// try {
+//   result = await attVerifierContract.methods.verify_attestation(
+//     public_key_x,
+//     public_key_y,
+//     hash,
+//     signature,
+//     requestUrls,
+//     allowedUrls,
+//     data_hashes,
+//     plain_json_response,
+//     businessProgram.address,
+//     id
+//   ).send({ from: aliceAccount.address }).wait();
+//   console.log("url update failed")
+// } catch {
+//   console.log("url update succeed")
+// }

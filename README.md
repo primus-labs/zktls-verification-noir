@@ -62,7 +62,15 @@ aztec codegen -o src/artifacts target
 ```
 # inside js_test
 yarn
+
+# e2e test
 yarn start
+
+# deploy contract only
+yarn start:deploy
+
+# send tx to a deploied contract
+yarn start:verify
 ```
 
 ## Adjust business logic
