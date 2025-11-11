@@ -19,7 +19,9 @@ const ATT_PATH = "testdata/eth_hash.json";
 
 const node = createAztecNodeClient("http://localhost:8080");
 
-const wallet = await TestWallet.create(node);
+const config = getPXEConfig();
+config.proverEnabled = true;
+const wallet = await TestWallet.create(node, config);
 const [aliceAccount] = await getInitialTestAccountsData();
 await wallet.createSchnorrAccount(aliceAccount.secret, aliceAccount.salt);
 

@@ -21,11 +21,7 @@ const ATT_PATH = "testdata/eth_hash.json";
 
 const node = createAztecNodeClient("http://localhost:8080");
 //const l1Contracts = await node.getL1ContractAddresses();
-
-// const config = getPXEConfig();
-// const fullConfig = { ...config, l1Contracts };
-// fullConfig.proverEnabled = true;
-
+//const fullConfig = { ...config, l1Contracts };
 // const store = await createStore("pxe", {
 //   dataDirectory: "store",
 //   dataStoreMapSizeKB: 1e6,
@@ -33,7 +29,9 @@ const node = createAztecNodeClient("http://localhost:8080");
 //const pxe = await createPXE(node, fullConfig, { store });
 // await waitForPXE(pxe);
 
-const wallet = await TestWallet.create(node);
+const config = getPXEConfig();
+config.proverEnabled = true;
+const wallet = await TestWallet.create(node, config);
 const [aliceAccount, bobAccount] = await getInitialTestAccountsData();
 let alice = await wallet.createSchnorrAccount(aliceAccount.secret, aliceAccount.salt);
 let bob = await wallet.createSchnorrAccount(bobAccount.secret, bobAccount.salt);
