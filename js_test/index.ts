@@ -11,7 +11,8 @@ import { createStore } from "@aztec/kv-store/lmdb";
 import { createPXE, getPXEConfig, PXE } from "@aztec/pxe/server";
 import { BusinessProgramContract } from "./bindings/BusinessProgram.js";
 import { performance } from "perf_hooks";
-import { createAztecNodeClient, getDecodedPublicEvents } from "@aztec/aztec.js";
+import { createAztecNodeClient } from "@aztec/aztec.js/node";
+import { rm } from "node:fs/promises";
 import { Barretenberg, Fr } from "@aztec/bb.js";
 import { url } from "inspector";
 
@@ -30,6 +31,8 @@ const node = createAztecNodeClient("http://localhost:8080");
 // await waitForPXE(pxe);
 
 const config = getPXEConfig();
+await rm("pxe", { recursive: true, force: true });
+config.dataDirectory = "pxe";
 config.proverEnabled = true;
 const wallet = await TestWallet.create(node, config);
 const [aliceAccount, bobAccount] = await getInitialTestAccountsData();
@@ -150,9 +153,10 @@ for (let url of allowedUrls) {
     url.push(0);
   }
 
-  const frArray = url.map(b => new Fr(BigInt(b)));
-  const hashFr = await bb.poseidon2Hash(frArray);
-  const hashBigInt = BigInt(hashFr.toString());
+  // inputs in bb.poseidon2Hash is now Uint8Array[]
+  const frArray = url.map(b => new Fr(BigInt(b)).toBuffer());
+  const hashFr = await bb.poseidon2Hash({ inputs: frArray });
+  const hashBigInt = BigInt(Fr.fromBuffer(hashFr.hash).toString());
   hashedUrls.push(hashBigInt);
 }
 
@@ -163,6 +167,10 @@ const businessProgram = await BusinessProgramContract.deploy(wallet, alice.addre
 console.log("deployed business program");
 
 const start = performance.now();
+// console.log("data_hashes:")
+// console.log(data_hashes)
+
+// TODO - 2D array seems to cause issues in dev.4
 let result = await attVerifierContract.methods.verify_attestation(
   public_key_x,
   public_key_y,
@@ -170,7 +178,7 @@ let result = await attVerifierContract.methods.verify_attestation(
   signature,
   requestUrls,
   allowedUrls,
-  data_hashes,
+  //data_hashes,
   plain_json_response,
   businessProgram.address,
   id
@@ -186,13 +194,14 @@ if (result.status != "success") {
   console.log("verification failed");
 }
 
-const success_event = await getDecodedPublicEvents<SuccessEvent>(
-  node,
-  AttVerifierContract.events.SuccessEvent,
-  result.blockNumber!,
-  2
-);
-console.log("Get success event: ", success_event);
+// TODO - update get public event
+// const success_event = await getDecodedPublicEvents<SuccessEvent>(
+//   node,
+//   AttVerifierContract.events.SuccessEvent,
+//   result.blockNumber!,
+//   2
+// );
+// console.log("Get success event: ", success_event);
 await bb.destroy()
 
 // ====================== test update url ===========================

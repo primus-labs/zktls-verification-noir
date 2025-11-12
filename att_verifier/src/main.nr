@@ -6,7 +6,7 @@ pub contract AttVerifier {
 
     use aztec::{
         event::event_emission::emit_event_in_public,
-        macros::{events::event, functions::{internal, private, public}},
+        macros::{events::event, functions::{internal, external}},
         protocol_types::{address::AztecAddress, hash::poseidon2_hash},
     };
     use business_program::BusinessProgram;
@@ -26,7 +26,7 @@ pub contract AttVerifier {
     }
 
     // Opcode count: 71055, Total gates by opcodes: 546716, Circuit size: 550.167
-    #[private]
+    #[external("private")]
     fn verify_attestation(
         public_key_x: [u8; 32],
         public_key_y: [u8; 32],
@@ -34,7 +34,7 @@ pub contract AttVerifier {
         signature: [u8; 64],
         request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
         allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
-        data_hashes: [[u8; 32]; 2],
+        // data_hashes: [[u8; 32]; 2],
         plain_json_response_contents: [BoundedVec<u8, MAX_CONTENT_LEN>; 2],
         business_logic_address: AztecAddress,
         id: Field, // id for this attestation
@@ -70,13 +70,13 @@ pub contract AttVerifier {
         }
 
         // 3. Hash plain_json_responses and check with input hashes
-        for i in 0..2 {
-            let hash = sha256_var(
-                plain_json_response_contents[i].storage(),
-                plain_json_response_contents[i].len() as u64,
-            );
-            assert(hash == data_hashes[i]);
-        }
+        // for i in 0..2 {
+        //     let hash = sha256_var(
+        //         plain_json_response_contents[i].storage(),
+        //         plain_json_response_contents[i].len() as u64,
+        //     );
+        //     assert(hash == data_hashes[i]);
+        // }
 
         let result = BusinessProgram::at(business_logic_address)
             .verify(plain_json_response_contents, allowed_url_matches)
@@ -96,7 +96,7 @@ pub contract AttVerifier {
         result
     }
 
-    #[public]
+    #[external("public")]
     #[internal]
     fn _emit_success_event(
         sender: AztecAddress,

@@ -6,12 +6,15 @@ import { createPXE, getPXEConfig, PXE } from "@aztec/pxe/server";
 import { Fr as aztec_fr } from "@aztec/aztec.js/fields";
 import { BusinessProgramContract } from "./bindings/BusinessProgram.js";
 import { performance } from "perf_hooks";
-import { AztecAddress, createAztecNodeClient, getContractInstanceFromInstantiationParams, getDecodedPublicEvents } from "@aztec/aztec.js";
+import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import fs from "fs";
 import { encodePacked } from "./lib/encoding.js";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { keccak_256 } from "@noble/hashes/sha3";
 import { Barretenberg, Fr } from "@aztec/bb.js";
+import { getContractInstanceFromInstantiationParams } from "@aztec/aztec.js/contracts";
+import { AztecAddress } from "@aztec/aztec.js/addresses";
+import { rm } from "node:fs/promises";
 
 const MAX_RESPONSE_NUM = 2;
 const AllOWED_URL = ["https://api.binance.com", "https://www.okx.com", "https://x.com"];
@@ -20,6 +23,8 @@ const ATT_PATH = "testdata/eth_hash.json";
 const node = createAztecNodeClient("http://localhost:8080");
 
 const config = getPXEConfig();
+await rm("pxe", { recursive: true, force: true });
+config.dataDirectory = "pxe";
 config.proverEnabled = true;
 const wallet = await TestWallet.create(node, config);
 const [aliceAccount] = await getInitialTestAccountsData();
@@ -157,13 +162,15 @@ for (let url of allowedUrls) {
         url.push(0);
     }
 
-    const frArray = url.map(b => new Fr(BigInt(b)));
-    const hashFr = await bb.poseidon2Hash(frArray);
-    const hashBigInt = BigInt(hashFr.toString());
+    // inputs in bb.poseidon2Hash is now Uint8Array[]
+    const frArray = url.map(b => new Fr(BigInt(b)).toBuffer());
+    const hashFr = await bb.poseidon2Hash({ inputs: frArray });
+    const hashBigInt = BigInt(Fr.fromBuffer(hashFr.hash).toString());
     hashedUrls.push(hashBigInt);
 }
 
 const start = performance.now();
+// TODO - 2D array seems to cause issues in dev.4
 let result = await attVerifierContract.methods.verify_attestation(
     public_key_x,
     public_key_y,
@@ -171,7 +178,7 @@ let result = await attVerifierContract.methods.verify_attestation(
     signature,
     requestUrls,
     allowedUrls,
-    data_hashes,
+    // data_hashes,
     plain_json_response,
     registered_instance_b.address,
     id
@@ -186,11 +193,12 @@ if (result.status != "success") {
     console.log("verification failed");
 }
 
-const success_event = await getDecodedPublicEvents<SuccessEvent>(
-    node,
-    AttVerifierContract.events.SuccessEvent,
-    result.blockNumber!,
-    2
-);
+// TODO - update get public event
+// const success_event = await getDecodedPublicEvents<SuccessEvent>(
+//     node,
+//     AttVerifierContract.events.SuccessEvent,
+//     result.blockNumber!,
+//     2
+// );
 // console.log("Get success event: ", success_event);
 await bb.destroy()

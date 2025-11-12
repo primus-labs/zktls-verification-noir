@@ -3,7 +3,7 @@ use dep::json_parser::JSON2kb;
 #[aztec]
 pub contract BusinessProgram {
     use dep::json_parser::JSON2kb;
-    use aztec::macros::functions::{initializer, private, public};
+    use aztec::macros::functions::{initializer, internal, external};
     use aztec::macros::storage::storage;
     use aztec::protocol_types::{address::AztecAddress, hash::poseidon2_hash};
     use aztec::state_vars::{public_immutable::PublicImmutable, public_mutable::PublicMutable};
@@ -17,14 +17,14 @@ pub contract BusinessProgram {
         allowed_url_hashes: PublicMutable<[Field; 3], Context>,
     }
 
-    #[public]
+    #[external("public")]
     fn set_admin(new_admin: AztecAddress) {
         assert(storage.admin.read().eq(context.msg_sender().unwrap()), "caller is not admin");
         storage.admin.write(new_admin);
     }
 
-    #[public]
     #[initializer]
+    #[external("public")]
     fn constructor(admin: AztecAddress, allowed_url_hashes: [Field; 3]) {
         assert(!admin.is_zero(), "invalid admin");
         storage.admin.write(admin);
@@ -32,13 +32,13 @@ pub contract BusinessProgram {
     }
 
     // TODO - allow update single url with index?
-    #[public]
+    #[external("public")]
     fn update_allowed_url_hashes(allowed_url_hashes: [Field; 3]) {
         assert(storage.admin.read().eq(context.msg_sender().unwrap()), "caller is not admin");
         storage.allowed_url_hashes.write(allowed_url_hashes);
     }
 
-    #[public]
+    #[external("public")]
     fn check_allowed_url(allowed_url_matches_hashes: [Field; 2]) {
         let allowed_url_hashes: [Field; 3] = storage.allowed_url_hashes.read();
         for i in 0..2 {
@@ -57,7 +57,7 @@ pub contract BusinessProgram {
     // Opcode count: 200841, Total gates by opcodes: 405505, Circuit size: 415536
     // json_paths.push("$.data[*].baseCcy"); is a string
     // json_paths.push("$.data[*].instIdCode"); is a number
-    #[private]
+    #[external("private")]
     fn verify(
         plain_json_response: [BoundedVec<u8, MAX_CONTENT_LEN>; 2],
         allowed_url_matches_hashes: [Field; 2],

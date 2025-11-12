@@ -3,7 +3,8 @@ import { AttVerifierContract, } from "./bindings/AttVerifier.js";
 import { getInitialTestAccountsData } from "@aztec/accounts/testing";
 import { TestWallet } from "@aztec/test-wallet/server";
 import { BusinessProgramContract } from "./bindings/BusinessProgram.js";
-import { createAztecNodeClient } from "@aztec/aztec.js";
+import { createAztecNodeClient } from "@aztec/aztec.js/node";
+import { rm } from "node:fs/promises";
 import { Barretenberg, Fr } from "@aztec/bb.js";
 import { getPXEConfig } from "@aztec/pxe/server";
 
@@ -13,6 +14,8 @@ const ATT_PATH = "testdata/eth_hash.json";
 
 const node = createAztecNodeClient("http://localhost:8080");
 const config = getPXEConfig();
+await rm("pxe", { recursive: true, force: true });
+config.dataDirectory = "pxe";
 config.proverEnabled = true;
 const wallet = await TestWallet.create(node, config);
 const [aliceAccount] = await getInitialTestAccountsData();
@@ -38,9 +41,10 @@ for (let url of allowedUrls) {
         url.push(0);
     }
 
-    const frArray = url.map(b => new Fr(BigInt(b)));
-    const hashFr = await bb.poseidon2Hash(frArray);
-    const hashBigInt = BigInt(hashFr.toString());
+    // inputs in bb.poseidon2Hash is now Uint8Array[]
+    const frArray = url.map(b => new Fr(BigInt(b)).toBuffer());
+    const hashFr = await bb.poseidon2Hash({ inputs: frArray });
+    const hashBigInt = BigInt(Fr.fromBuffer(hashFr.hash).toString());
     hashedUrls.push(hashBigInt);
 }
 
