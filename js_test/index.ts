@@ -178,7 +178,7 @@ let result = await attVerifierContract.methods.verify_attestation(
   signature,
   requestUrls,
   allowedUrls,
-  //data_hashes,
+  data_hashes,
   plain_json_response,
   businessProgram.address,
   id
