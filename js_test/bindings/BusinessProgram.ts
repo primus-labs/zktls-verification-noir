@@ -18,16 +18,16 @@ export const BusinessProgramContractArtifact = loadContractArtifact(BusinessProg
  * Type-safe interface for contract BusinessProgram;
  */
 export class BusinessProgramContract extends ContractBase {
-
+  
   private constructor(
     instance: ContractInstanceWithAddress,
     wallet: Wallet,
   ) {
     super(instance, BusinessProgramContractArtifact, wallet);
   }
+  
 
-
-
+  
   /**
    * Creates a contract instance.
    * @param address - The deployed contract's address.
@@ -41,18 +41,18 @@ export class BusinessProgramContract extends ContractBase {
     return Contract.at(address, BusinessProgramContract.artifact, wallet) as Promise<BusinessProgramContract>;
   }
 
-
+  
   /**
    * Creates a tx to deploy a new instance of this contract.
    */
-  public static deploy(wallet: Wallet, admin: AztecAddressLike, allowed_url_hashes: FieldLike[]) {
+  public static deploy(wallet: Wallet, admin: AztecAddressLike, allowed_url_hashes: FieldLike[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }) {
     return new DeployMethod<BusinessProgramContract>(PublicKeys.default(), wallet, BusinessProgramContractArtifact, BusinessProgramContract.at, Array.from(arguments).slice(1));
   }
 
   /**
    * Creates a tx to deploy a new instance of this contract using the specified public keys hash to derive the address.
    */
-  public static deployWithPublicKeys(publicKeys: PublicKeys, wallet: Wallet, admin: AztecAddressLike, allowed_url_hashes: FieldLike[]) {
+  public static deployWithPublicKeys(publicKeys: PublicKeys, wallet: Wallet, admin: AztecAddressLike, allowed_url_hashes: FieldLike[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }) {
     return new DeployMethod<BusinessProgramContract>(publicKeys, wallet, BusinessProgramContractArtifact, BusinessProgramContract.at, Array.from(arguments).slice(2));
   }
 
@@ -72,9 +72,9 @@ export class BusinessProgramContract extends ContractBase {
       opts.method ?? 'constructor',
     );
   }
+  
 
-
-
+  
   /**
    * Returns this contract's artifact.
    */
@@ -88,28 +88,31 @@ export class BusinessProgramContract extends ContractBase {
   public static get artifactForPublic(): ContractArtifact {
     return loadContractArtifactForPublic(BusinessProgramContractArtifactJson as NoirCompiledContract);
   }
+  
 
-
-  public static get storage(): ContractStorageLayout<'admin' | 'allowed_url_hashes'> {
-    return {
-      admin: {
-        slot: new Fr(1n),
-      },
-      allowed_url_hashes: {
-        slot: new Fr(2n),
-      }
-    } as ContractStorageLayout<'admin' | 'allowed_url_hashes'>;
-  }
-
+  public static get storage(): ContractStorageLayout<'admin' | 'allowed_url_hashes' | 'H'> {
+      return {
+        admin: {
+      slot: new Fr(1n),
+    },
+allowed_url_hashes: {
+      slot: new Fr(2n),
+    },
+H: {
+      slot: new Fr(5n),
+    }
+      } as ContractStorageLayout<'admin' | 'allowed_url_hashes' | 'H'>;
+    }
+    
 
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public declare methods: {
+    
+    /** check_public_values(allowed_url_matches_hashes: array, H: struct) */
+    check_public_values: ((allowed_url_matches_hashes: FieldLike[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** check_allowed_url(allowed_url_matches_hashes: array) */
-    check_allowed_url: ((allowed_url_matches_hashes: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
-
-    /** constructor(admin: struct, allowed_url_hashes: array) */
-    constructor: ((admin: AztecAddressLike, allowed_url_hashes: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** constructor(admin: struct, allowed_url_hashes: array, H: struct) */
+    constructor: ((admin: AztecAddressLike, allowed_url_hashes: FieldLike[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** process_message(message_ciphertext: struct, message_context: struct) */
     process_message: ((message_ciphertext: FieldLike[], message_context: { tx_hash: FieldLike, unique_note_hashes_in_tx: FieldLike[], first_nullifier_in_tx: FieldLike, recipient: AztecAddressLike }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
@@ -126,9 +129,9 @@ export class BusinessProgramContract extends ContractBase {
     /** update_allowed_url_hashes(allowed_url_hashes: array) */
     update_allowed_url_hashes: ((allowed_url_hashes: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** verify(plain_json_response: array, allowed_url_matches_hashes: array) */
-    verify: ((plain_json_response: (bigint | number)[][], allowed_url_matches_hashes: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** verify(msgs: struct, H: struct, allowed_url_matches_hashes: array) */
+    verify: ((msgs: (bigint | number)[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }, allowed_url_matches_hashes: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
   };
 
-
+  
 }

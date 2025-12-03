@@ -5,8 +5,7 @@ pub contract BusinessProgram {
     use aztec::macros::functions::{external, internal};
     use std::embedded_curve_ops::EmbeddedCurvePoint;
 
-    global MAX_CONTENT_LEN: u32 = 1000;
-    global MAX_MSGS_LEN: u32 = 100;
+    global MAX_MSGS_LEN: u32 = 200;
 
     #[external("private")]
     fn verify(

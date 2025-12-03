@@ -10,7 +10,6 @@ pub contract AttVerifier {
         protocol_types::{address::AztecAddress, hash::poseidon2_hash},
     };
     use business_program::BusinessProgram;
-    use sha256::sha256_var;
     use std::embedded_curve_ops::{
         embedded_curve_add, EmbeddedCurvePoint, EmbeddedCurveScalar, fixed_base_scalar_mul,
         multi_scalar_mul,
@@ -18,10 +17,7 @@ pub contract AttVerifier {
     use string_search::{StringBody, StringBody1024, SubString, SubString1024};
 
     global MAX_URL_LEN: u32 = 1024;
-    global MAX_CONTENT_LEN: u32 = 1000;
-    global MAX_MSGS_LEN: u32 = 100; // TODO increase
-
-    // G is fixed, H is fixed per business case
+    global MAX_MSGS_LEN: u32 = 200;
 
     // TODO move success event to business logic
     //Emitted public log limit: 13 fields
@@ -33,7 +29,6 @@ pub contract AttVerifier {
         id: Field,
     }
 
-    // Opcode count: 71055, Total gates by opcodes: 546716, Circuit size: 550.167
     #[external("private")]
     fn verify_attestation(
         public_key_x: [u8; 32],
@@ -42,11 +37,11 @@ pub contract AttVerifier {
         signature: [u8; 64],
         request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
         allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
-        coms: [EmbeddedCurvePoint; 7],
+        coms: [EmbeddedCurvePoint; 7], // TODO dynamic size?
         rnds: [Field; 7],
         msgs_chunks: [Field; 7],
         msgs: BoundedVec<u8, MAX_MSGS_LEN>,
-        H: EmbeddedCurvePoint,
+        H: EmbeddedCurvePoint, // G is fixed, H is fixed per business case
         business_logic_address: AztecAddress,
         id: Field, // id for this attestation
     ) -> bool {

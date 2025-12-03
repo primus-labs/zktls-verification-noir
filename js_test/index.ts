@@ -1,4 +1,3 @@
-
 import fs from "fs";
 import { keccak_256 } from "@noble/hashes/sha3";
 import { secp256k1 } from "@noble/curves/secp256k1";
@@ -20,15 +19,10 @@ const MAX_RESPONSE_NUM = 2;
 const AllOWED_URL = ["https://api.binance.com", "https://www.okx.com", "https://x.com"];
 const ATT_PATH = "testdata/attestation_data_grumpkin.json";
 
+// Safe max nr of bits that can be encoded in a chunk because Field modulus has 254 bits
+const GRUMPKIN_BATCH_SIZE = 253;
+
 const node = createAztecNodeClient("http://localhost:8080");
-//const l1Contracts = await node.getL1ContractAddresses();
-//const fullConfig = { ...config, l1Contracts };
-// const store = await createStore("pxe", {
-//   dataDirectory: "store",
-//   dataStoreMapSizeKB: 1e6,
-// });
-//const pxe = await createPXE(node, fullConfig, { store });
-// await waitForPXE(pxe);
 
 const config = getPXEConfig();
 await rm("pxe", { recursive: true, force: true });
@@ -100,48 +94,9 @@ for (const url of AllOWED_URL) {
   allowedUrls.push(url_bytes)
 }
 
-
-
 const id = Math.floor(Math.random() * 9999999999);
 
-// Collect all hashes from public_data.attestation.data
-const data_hashes: number[][] = [];
 const attData = JSON.parse(obj.public_data[0].attestation.data);
-for (const [key, value] of Object.entries(attData)) {
-  // for attestation_data_hash.json
-  if (key.startsWith("uuid-") && typeof value === "string" && value.length === 64) {
-    // Convert each 32-byte hex string into an array of bytes
-    const hashBytes = Array.from(Buffer.from(value, "hex"));
-    data_hashes.push(hashBytes);
-  }
-  // for eth_hash.json
-  if (key.startsWith("hash-of-response") && typeof value === "string" && value.length === 64) {
-    // Convert each 32-byte hex string into an array of bytes
-    const hashBytes = Array.from(Buffer.from(value, "hex"));
-    data_hashes.push(hashBytes);
-  }
-}
-// repeat the last element of data_hashes till MAX_RESPONSE_NUM 
-const data_diff = MAX_RESPONSE_NUM - data_hashes.length;
-for (let i = 0; i < data_diff; i++) {
-  data_hashes.push(data_hashes.at(-1) as number[]);
-}
-
-const plain_json_response: number[][] = [];
-
-if (obj.private_data && Array.isArray(obj.private_data.plain_json_response)) {
-  for (const entry of obj.private_data.plain_json_response) {
-    if (entry.id && entry.content) {
-      const jsonBytes = Array.from(new TextEncoder().encode(entry.content));
-      plain_json_response.push(jsonBytes);
-    }
-  }
-}
-// repeat the last element of plain_json_response till MAX_RESPONSE_NUM 
-const plain_json_diff = MAX_RESPONSE_NUM - plain_json_response.length;
-for (let i = 0; i < plain_json_diff; i++) {
-  plain_json_response.push(plain_json_response.at(-1) as number[]);
-}
 
 const bb = await Barretenberg.new();
 const hashedUrls: bigint[] = [];
@@ -160,57 +115,104 @@ for (let url of allowedUrls) {
   hashedUrls.push(hashBigInt);
 }
 
-// EmbeddedCurvePoint is representation in Weierstrass form, if is_infinite is false
-let H = { x: 19978178333943292355349418156359056918133515370613875064303296301489725624535, 
-  y: 13201885744872984780649110422697192888453633882501354541258277493771319153464, 
+let H = { x: 19978178333943292355349418156359056918133515370613875064303296301489725624535n, 
+  y: 13201885744872984780649110422697192888453633882501354541258277493771319153464n, 
   is_infinite: false };
   
 // deploy business program
+// this also initialized the contract storage with admin, allowed_url_hashes and point H
 const businessProgram = await BusinessProgramContract.deploy(wallet, alice.address, hashedUrls, H)
-  .send({ from: aliceAccount.address }) // testAccount has fee juice and is registered in the deployer_wallet
+  .send({ from: aliceAccount.address })
   .deployed();
 console.log("deployed business program");
 
-function computeMsgsChunks(jsonStr: WithImplicitCoercion<string> | { [Symbol.toPrimitive](hint: "string"): string; }) {
-  const bytes = Array.from(Buffer.from(jsonStr, "utf8"));
-  bytes.reverse();
+// Prepare inputs wrt Pederson commitment
 
-  // convert bytes to bit array (LSB-first)
-  const bits = [];
-  for (const b of bytes) {
-    for (let i = 0; i < 8; i++) {
-      bits.push((b >> i) & 1);
+// Converts a 32-byte array to a scalar (bigint), matching Rust's bytes2scalar.
+function bytes32ToBigInt(bytes: Uint8Array): bigint {
+  if (bytes.length !== 32) {
+    throw new Error("Expected 32 bytes");
+  }
+  
+  const limbs: bigint[] = [];
+  
+  // Process in reverse: chunks of 8 bytes from end to start
+  for (let i = 3; i >= 0; i--) {
+    const start = i * 8;
+    const chunk = bytes.slice(start, start + 8);
+    let limb = 0n;
+    for (let j = 0; j < 8; j++) {
+      limb = (limb << 8n) | BigInt(chunk[j]);
     }
+    limbs.push(limb);
   }
-
-  const batchSize = 7; // GRUMPKIN_BATCH_SIZE
-  const exp = []; // basis scalars [2^i grouped by batchSize]
-
-  for (let i = 0; i < batchSize; i++) {
-    const bytes32 = new Uint8Array(32);
-    const j = Math.floor(i / 8);
-    const k = i % 8;
-    bytes32[31 - j] |= 1 << k;
-    exp.push(BigInt("0x" + Buffer.from(bytes32).toString("hex")));
+  
+  // Reconstruct the 256-bit number from limbs
+  let result = 0n;
+  for (let i = 0; i < 4; i++) {
+    result = result | (limbs[i] << BigInt(i * 64));
   }
-
-  const msgs_chunks = [];
-  let idx = 0;
-  const chunk_len = Math.ceil(bits.length / batchSize);
-
-  for (let chunk = 0; chunk < chunk_len; chunk++) {
-    let sk = 0n;
-    for (let j = 0; j < batchSize && idx < bits.length; j++) {
-      if (bits[idx] === 1) sk += exp[j];
-      idx++;
-    }
-    msgs_chunks.push(sk);
-  }
-
-  return msgs_chunks;
+  
+  return result;
 }
 
+// Generates the basis of 2^i powers as bigints for batch_size elements.
+function generateExp(batchSize: number): bigint[] {
+  const vec: bigint[] = [];
+  for (let i = 0; i < batchSize; i++) {
+    const j = Math.floor(i / 8);
+    const k = i % 8;
+    const bytes = new Uint8Array(32);
+    bytes[31 - j] |= 1 << k;
+    
+    const scalar = bytes32ToBigInt(bytes);
+    vec.push(scalar);
+  }
+  return vec;
+}
 
+// Splits a JSON response string into field element chunks using bit packing.
+// Matches the Rust split_json_response function.
+function computeMsgsChunks(jsonResponse: string, batchSize: number): bigint[] {
+  // Convert string to bytes and reverse
+  let bytes = Array.from(new TextEncoder().encode(jsonResponse));
+  bytes.reverse();
+  
+  // Expand bytes into bits (LSB first for each byte)
+  const bits: boolean[] = [];
+  for (const byte of bytes) {
+    for (let i = 0; i < 8; i++) {
+      const b = (byte >> i) & 1;
+      bits.push(b !== 0);
+    }
+  }
+  
+  // Generate the basis (powers of 2)
+  const exp = generateExp(batchSize);
+  
+  // Create chunks - each chunk encodes batchSize bits
+  const vec: bigint[] = [];
+  const chunkLen = Math.ceil(bits.length / batchSize);
+  let index = 0;
+  
+  for (let _ = 0; _ < chunkLen; _++) {
+    let scalar = 0n;
+    for (let j = 0; j < batchSize; j++) {
+      if (index >= bits.length) {
+        break;
+      }
+      if (bits[index]) {
+        scalar = scalar + exp[j];
+      }
+      index++;
+    }
+    vec.push(scalar);
+  }
+  
+  return vec;
+}
+
+// Since for this example the msg length is ~200 bytes, there are 7 Field elms
 // rnds (7 scalars)
 const rnds = obj.private_data[0].random.map((hex: string) => BigInt("0x" + hex));
 
@@ -237,29 +239,25 @@ const coms = verificationArray.map((hex: string) => {
     is_infinite: false,
   };
 });
-// msgs_bytes = raw JSON string from private_data.content
-const msgs_bytes = Array.from(new TextEncoder().encode(obj.private_data[0].content));
 
+// Get the full content string (includes wrapper structure)
+const content = obj.private_data[0].content;
+
+// Compute message chunks
+// With 200 bytes = 1600 bits and batchSize=253: ceil(1600/253) = 7 chunks
+const msgs_chunks = computeMsgsChunks(content, GRUMPKIN_BATCH_SIZE);
+
+// Extract reveal string for msgs array
 let reveal_json_raw = attData["#reveal_id"];
-
 if (typeof reveal_json_raw === "string") {
   try {
     reveal_json_raw = JSON.parse(reveal_json_raw);
   } catch {
-    // string but not JSON → error
     throw new Error("Invalid JSON in #reveal_id");
   }
 }
-
-// Now reveal_json_raw **is an object**
-const reveal_json = reveal_json_raw;
-
-// to get the normalized reveal string
-const reveal_str = JSON.stringify(reveal_json);
-const msgs_chunks = computeMsgsChunks(reveal_str);
-// TODO adjust length
-// for now enforce max length 100
-const msgs = Array.from(Buffer.from(reveal_str, "utf8")).slice(0, 100);
+const reveal_str = JSON.stringify(reveal_json_raw);
+const msgs = Array.from(Buffer.from(reveal_str, "utf8"));
 
 const start = performance.now();
 
@@ -278,7 +276,7 @@ let result = await attVerifierContract.methods.verify_attestation(
   businessProgram.address,
   id
 ).send({ from: aliceAccount.address }).wait();
-// This works for AttVerifier without event emission
+
 const end = performance.now();
 const duration = (end - start).toFixed(2);
 

@@ -1,5 +1,4 @@
 use dep::aztec::macros::aztec;
-use dep::json_parser::JSON2kb;
 #[aztec]
 pub contract BusinessProgram {
     use dep::json_parser::JSON512b;
@@ -11,7 +10,7 @@ pub contract BusinessProgram {
 
     global MAX_URL_LEN: u32 = 1024;
     global MAX_CONTENT_LEN: u32 = 1000;
-    global MAX_MSGS_LEN: u32 = 100;
+    global MAX_MSGS_LEN: u32 = 200;
 
     #[storage]
     struct Storage<Context> {
@@ -71,6 +70,7 @@ pub contract BusinessProgram {
         allowed_url_matches_hashes: [Field; 2],
     ) -> bool {
         // Check values
+        // TODO what assert to do here?
         let (trailing_stop_order, limit_order) = get_values(msgs);
 
         BusinessProgram::at(context.this_address())
@@ -84,7 +84,7 @@ pub contract BusinessProgram {
     fn get_values(plaintext: BoundedVec<u8, MAX_MSGS_LEN>) -> (bool, bool) {
         let json = JSON512b::parse_bounded_vec_json(plaintext);
 
-        // for attestation_data_gumpkin.json
+        // for attestation_data_grumpkin.json
         let key0: BoundedVec<u8, 17> = BoundedVec::from_array("trailingStopOrder".as_bytes());
         let trailing_stop_order = json.get_literal(key0).unwrap();
 
@@ -92,36 +92,6 @@ pub contract BusinessProgram {
         let limit_order = json.get_literal(key1).unwrap();
 
         (trailing_stop_order.to_bool(), limit_order.to_bool())
-    }
-
-    #[contract_library_method]
-    unconstrained fn sanitize_ascii<let N: u32>(input: BoundedVec<u8, N>) -> BoundedVec<u8, N> {
-        let mut clean = BoundedVec::<u8, N>::new();
-        for i in 0..N {
-            if i < input.len() {
-                let b = input.get(i);
-                // Keep only printable ASCII, else use '?'
-                let valid = (b >= 32) & (b <= 126);
-                let valid_f = valid as u8;
-                let sanitized = b * valid_f + 63 * (1 - valid_f); // '?' = 63
-
-                clean.push(sanitized);
-            }
-        }
-        clean
-    }
-
-    #[contract_library_method]
-    fn verify_sanitized_ascii(plaintext: BoundedVec<u8, 4096>, sanitized: BoundedVec<u8, 4096>) {
-        assert(plaintext.len() == sanitized.len());
-        for i in 0..4096 {
-            if i < plaintext.len() {
-                // plaintext.get(i) should be either equal to sanitized.get(i) or 63 (we intentionally replaced it)
-                let b = plaintext.get(i);
-                let s = sanitized.get(i);
-                assert((b == s) | (s == 63));
-            }
-        }
     }
 
 }
