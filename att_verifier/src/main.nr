@@ -11,11 +11,19 @@ pub contract AttVerifier {
     };
     use business_program::BusinessProgram;
     use sha256::sha256_var;
+    use std::embedded_curve_ops::{
+        embedded_curve_add, EmbeddedCurvePoint, EmbeddedCurveScalar, fixed_base_scalar_mul,
+        multi_scalar_mul,
+    };
     use string_search::{StringBody, StringBody1024, SubString, SubString1024};
 
     global MAX_URL_LEN: u32 = 1024;
     global MAX_CONTENT_LEN: u32 = 1000;
+    global MAX_MSGS_LEN: u32 = 100; // TODO increase
 
+    // G is fixed, H is fixed per business case
+
+    // TODO move success event to business logic
     //Emitted public log limit: 13 fields
     #[event]
     struct SuccessEvent {
@@ -34,8 +42,11 @@ pub contract AttVerifier {
         signature: [u8; 64],
         request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
         allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
-        data_hashes: [[u8; 32]; 2],
-        plain_json_response_contents: [BoundedVec<u8, MAX_CONTENT_LEN>; 2],
+        coms: [EmbeddedCurvePoint; 7],
+        rnds: [Field; 7],
+        msgs_chunks: [Field; 7],
+        msgs: BoundedVec<u8, MAX_MSGS_LEN>,
+        H: EmbeddedCurvePoint,
         business_logic_address: AztecAddress,
         id: Field, // id for this attestation
     ) -> bool {
@@ -69,17 +80,19 @@ pub contract AttVerifier {
             allowed_url_matches[i] = poseidon2_hash::<1024>(hash_input);
         }
 
-        // 3. Hash plain_json_responses and check with input hashes
-        for i in 0..2 {
-            let hash = sha256_var(
-                plain_json_response_contents[i].storage(),
-                plain_json_response_contents[i].len() as u64,
+        // 3. Check commitments
+        for i in 0..7 {
+            assert(
+                embedded_curve_add(
+                    fixed_base_scalar_mul(EmbeddedCurveScalar::from_field(msgs_chunks[i])),
+                    multi_scalar_mul([H], [EmbeddedCurveScalar::from_field(rnds[i])]),
+                )
+                    == coms[i],
             );
-            assert(hash == data_hashes[i]);
         }
 
         let result = BusinessProgram::at(business_logic_address)
-            .verify(plain_json_response_contents, allowed_url_matches)
+            .verify(msgs, H, allowed_url_matches)
             .call(&mut context);
 
         if result {

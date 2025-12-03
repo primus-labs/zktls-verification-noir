@@ -18,7 +18,7 @@ import { url } from "inspector";
 
 const MAX_RESPONSE_NUM = 2;
 const AllOWED_URL = ["https://api.binance.com", "https://www.okx.com", "https://x.com"];
-const ATT_PATH = "testdata/eth_hash.json";
+const ATT_PATH = "testdata/attestation_data_grumpkin.json";
 
 const node = createAztecNodeClient("http://localhost:8080");
 //const l1Contracts = await node.getL1ContractAddresses();
@@ -160,17 +160,109 @@ for (let url of allowedUrls) {
   hashedUrls.push(hashBigInt);
 }
 
+// EmbeddedCurvePoint is representation in Weierstrass form, if is_infinite is false
+let H = { x: 19978178333943292355349418156359056918133515370613875064303296301489725624535, 
+  y: 13201885744872984780649110422697192888453633882501354541258277493771319153464, 
+  is_infinite: false };
+  
 // deploy business program
-const businessProgram = await BusinessProgramContract.deploy(wallet, alice.address, hashedUrls)
+const businessProgram = await BusinessProgramContract.deploy(wallet, alice.address, hashedUrls, H)
   .send({ from: aliceAccount.address }) // testAccount has fee juice and is registered in the deployer_wallet
   .deployed();
 console.log("deployed business program");
 
-const start = performance.now();
-// console.log("data_hashes:")
-// console.log(data_hashes)
+function computeMsgsChunks(jsonStr: WithImplicitCoercion<string> | { [Symbol.toPrimitive](hint: "string"): string; }) {
+  const bytes = Array.from(Buffer.from(jsonStr, "utf8"));
+  bytes.reverse();
 
-// TODO - 2D array seems to cause issues in dev.4
+  // convert bytes to bit array (LSB-first)
+  const bits = [];
+  for (const b of bytes) {
+    for (let i = 0; i < 8; i++) {
+      bits.push((b >> i) & 1);
+    }
+  }
+
+  const batchSize = 7; // GRUMPKIN_BATCH_SIZE
+  const exp = []; // basis scalars [2^i grouped by batchSize]
+
+  for (let i = 0; i < batchSize; i++) {
+    const bytes32 = new Uint8Array(32);
+    const j = Math.floor(i / 8);
+    const k = i % 8;
+    bytes32[31 - j] |= 1 << k;
+    exp.push(BigInt("0x" + Buffer.from(bytes32).toString("hex")));
+  }
+
+  const msgs_chunks = [];
+  let idx = 0;
+  const chunk_len = Math.ceil(bits.length / batchSize);
+
+  for (let chunk = 0; chunk < chunk_len; chunk++) {
+    let sk = 0n;
+    for (let j = 0; j < batchSize && idx < bits.length; j++) {
+      if (bits[idx] === 1) sk += exp[j];
+      idx++;
+    }
+    msgs_chunks.push(sk);
+  }
+
+  return msgs_chunks;
+}
+
+
+// rnds (7 scalars)
+const rnds = obj.private_data[0].random.map((hex: string) => BigInt("0x" + hex));
+
+const attDataParsed = JSON.parse(obj.public_data[0].attestation.data);
+const verificationArray = JSON.parse(attDataParsed["#verification_id"]);
+
+function bytesToBigInt(bytes: Uint8Array): bigint {
+  return BigInt("0x" + Buffer.from(bytes).toString("hex"));
+}
+
+const coms = verificationArray.map((hex: string) => {
+  const bytes = Buffer.from(hex, "hex");
+
+  if (bytes.length !== 65 || bytes[0] !== 0x04) {
+    throw new Error("Expected uncompressed EC point (04 | x | y)");
+  }
+
+  const xBytes = new Uint8Array(bytes.slice(1, 33));
+  const yBytes = new Uint8Array(bytes.slice(33, 65));
+
+  return {
+    x: bytesToBigInt(xBytes),
+    y: bytesToBigInt(yBytes),
+    is_infinite: false,
+  };
+});
+// msgs_bytes = raw JSON string from private_data.content
+const msgs_bytes = Array.from(new TextEncoder().encode(obj.private_data[0].content));
+
+let reveal_json_raw = attData["#reveal_id"];
+
+if (typeof reveal_json_raw === "string") {
+  try {
+    reveal_json_raw = JSON.parse(reveal_json_raw);
+  } catch {
+    // string but not JSON → error
+    throw new Error("Invalid JSON in #reveal_id");
+  }
+}
+
+// Now reveal_json_raw **is an object**
+const reveal_json = reveal_json_raw;
+
+// to get the normalized reveal string
+const reveal_str = JSON.stringify(reveal_json);
+const msgs_chunks = computeMsgsChunks(reveal_str);
+// TODO adjust length
+// for now enforce max length 100
+const msgs = Array.from(Buffer.from(reveal_str, "utf8")).slice(0, 100);
+
+const start = performance.now();
+
 let result = await attVerifierContract.methods.verify_attestation(
   public_key_x,
   public_key_y,
@@ -178,8 +270,11 @@ let result = await attVerifierContract.methods.verify_attestation(
   signature,
   requestUrls,
   allowedUrls,
-  data_hashes,
-  plain_json_response,
+  coms,
+  rnds,
+  msgs_chunks,
+  msgs,
+  H,
   businessProgram.address,
   id
 ).send({ from: aliceAccount.address }).wait();

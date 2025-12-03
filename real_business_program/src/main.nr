@@ -2,19 +2,22 @@ use dep::aztec::macros::aztec;
 use dep::json_parser::JSON2kb;
 #[aztec]
 pub contract BusinessProgram {
-    use dep::json_parser::JSON2kb;
-    use aztec::macros::functions::{initializer, internal, external};
+    use dep::json_parser::JSON512b;
+    use aztec::macros::functions::{external, initializer, internal};
     use aztec::macros::storage::storage;
     use aztec::protocol_types::{address::AztecAddress, hash::poseidon2_hash};
     use aztec::state_vars::{public_immutable::PublicImmutable, public_mutable::PublicMutable};
+    use std::embedded_curve_ops::EmbeddedCurvePoint;
 
     global MAX_URL_LEN: u32 = 1024;
     global MAX_CONTENT_LEN: u32 = 1000;
+    global MAX_MSGS_LEN: u32 = 100;
 
     #[storage]
     struct Storage<Context> {
         admin: PublicMutable<AztecAddress, Context>,
         allowed_url_hashes: PublicMutable<[Field; 3], Context>,
+        H: PublicImmutable<EmbeddedCurvePoint, Context>,
     }
 
     #[external("public")]
@@ -25,10 +28,11 @@ pub contract BusinessProgram {
 
     #[initializer]
     #[external("public")]
-    fn constructor(admin: AztecAddress, allowed_url_hashes: [Field; 3]) {
+    fn constructor(admin: AztecAddress, allowed_url_hashes: [Field; 3], H: EmbeddedCurvePoint) {
         assert(!admin.is_zero(), "invalid admin");
         storage.admin.write(admin);
         storage.allowed_url_hashes.write(allowed_url_hashes);
+        storage.H.initialize(H);
     }
 
     // TODO - allow update single url with index?
@@ -39,7 +43,8 @@ pub contract BusinessProgram {
     }
 
     #[external("public")]
-    fn check_allowed_url(allowed_url_matches_hashes: [Field; 2]) {
+    fn check_public_values(allowed_url_matches_hashes: [Field; 2], H: EmbeddedCurvePoint) {
+        // Check allowed_url_matches_hashes are in storage
         let allowed_url_hashes: [Field; 3] = storage.allowed_url_hashes.read();
         for i in 0..2 {
             let check_hash = allowed_url_matches_hashes[i];
@@ -51,69 +56,42 @@ pub contract BusinessProgram {
             }
             assert(found);
         }
+
+        // Check H equals the publicly known value
+        let stored_H: EmbeddedCurvePoint = storage.H.read();
+        assert(H == stored_H);
     }
 
-    // gatecount 222.973 (versus 476.199), but note there are no assertions done on the values
-    // Opcode count: 200841, Total gates by opcodes: 405505, Circuit size: 415536
-    // json_paths.push("$.data[*].baseCcy"); is a string
-    // json_paths.push("$.data[*].instIdCode"); is a number
+    // Check H equals the publicly known value
+    // do asserts on msgs
     #[external("private")]
     fn verify(
-        plain_json_response: [BoundedVec<u8, MAX_CONTENT_LEN>; 2],
+        msgs: BoundedVec<u8, MAX_MSGS_LEN>,
+        H: EmbeddedCurvePoint,
         allowed_url_matches_hashes: [Field; 2],
     ) -> bool {
-        // Each of the plaintexts must be parsed to json
-        for i in 0..2 {
-            // Parse plaintext to JSON and obtain the custom values we want to check
-            let (base_ccy, inst_id_code) = get_values(plain_json_response[i]);
-
-            // TODO what to assert about base_ccy and inst_id_code
-        }
+        // Check values
+        let (trailing_stop_order, limit_order) = get_values(msgs);
 
         BusinessProgram::at(context.this_address())
-            .check_allowed_url(allowed_url_matches_hashes)
+            .check_public_values(allowed_url_matches_hashes, H)
             .enqueue(&mut context);
 
         true
     }
 
     #[contract_library_method]
-    fn get_values(plaintext: BoundedVec<u8, MAX_CONTENT_LEN>) -> (u64, BoundedVec<u8, 10>) {
-        // TODO is this needed?
-        // // Safety: first sanitize the plaintext to ensure it is valid ASCII, then check this was done correctly
-        // let sanitized = unsafe { sanitize_ascii(plaintext) };
-        // // Uncommenting this check fails compilation
-        // verify_sanitized_ascii(plaintext, sanitized);
+    fn get_values(plaintext: BoundedVec<u8, MAX_MSGS_LEN>) -> (bool, bool) {
+        let json = JSON512b::parse_bounded_vec_json(plaintext);
 
-        
-        let json = JSON2kb::parse_bounded_vec_json(plaintext);
+        // for attestation_data_gumpkin.json
+        let key0: BoundedVec<u8, 17> = BoundedVec::from_array("trailingStopOrder".as_bytes());
+        let trailing_stop_order = json.get_literal(key0).unwrap();
 
-        // for attestation_data_hash.json
-        // let key0: BoundedVec<u8, 4> = BoundedVec::from_array("data".as_bytes());
+        let key1: BoundedVec<u8, 10> = BoundedVec::from_array("limitOrder".as_bytes());
+        let limit_order = json.get_literal(key1).unwrap();
 
-        // let data_array = json.get_array(key0).unwrap();
-        // let first_item: JSON2kb = data_array.get_object_from_array(0).unwrap();
-
-        // let key1: BoundedVec<u8, 7> = BoundedVec::from_array("baseCcy".as_bytes());
-        // let base_ccy: BoundedVec<u8, 5> = first_item.get_string_from_path([key1]).unwrap();
-
-        // let key2: BoundedVec<u8, 10> = BoundedVec::from_array("instIdCode".as_bytes());
-        // let inst_id_code: u64 = first_item.get_number(key2).unwrap();
-
-        // (base_ccy, inst_id_code)
-
-        // for eth_hash.json
-        let key0: BoundedVec<u8, 15> = BoundedVec::from_array("makerCommission".as_bytes());
-        let maker_commission = json.get_number(key0).unwrap();
-
-        let key1: BoundedVec<u8, 15> = BoundedVec::from_array("commissionRates".as_bytes());
-        let commission_rate_obj: JSON2kb = json.get_object(key1).unwrap();
-
-        let key2: BoundedVec<u8, 5> = BoundedVec::from_array("maker".as_bytes());
-        let maker_rate_str: BoundedVec<u8, 10> = commission_rate_obj.get_string_from_path([key2]).unwrap();
-        (maker_commission, maker_rate_str)
-
-
+        (trailing_stop_order.to_bool(), limit_order.to_bool())
     }
 
     #[contract_library_method]
