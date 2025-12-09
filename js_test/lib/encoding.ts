@@ -1,10 +1,5 @@
 import { keccak_256 } from "@noble/hashes/sha3";
 
-export function padTo(arr: number[], target: number): number[] {
-  if (arr.length > target) throw new Error(`too long: ${arr.length} > ${target}`);
-  return arr.concat(Array(target - arr.length).fill(0));
-}
-
 export function encodePacked(publicData: any): number[] {
   const out: number[] = [];
 

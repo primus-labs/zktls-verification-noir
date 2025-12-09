@@ -2,7 +2,14 @@ use dep::aztec::macros::aztec;
 #[aztec]
 pub contract BusinessProgram {
     use dep::json_parser::JSON512b;
-    use aztec::macros::functions::{external, initializer, internal};
+    use att_verifier_lib::verify_attestation_comm;
+    use aztec::{
+      event::event_emission::emit_event_in_public,
+      macros::{
+        events::event,
+        functions::{external, initializer, internal}
+      }
+    };
     use aztec::macros::storage::storage;
     use aztec::protocol_types::{address::AztecAddress, hash::poseidon2_hash};
     use aztec::state_vars::{public_immutable::PublicImmutable, public_mutable::PublicMutable};
@@ -11,6 +18,13 @@ pub contract BusinessProgram {
     global MAX_URL_LEN: u32 = 1024;
     global MAX_CONTENT_LEN: u32 = 1000;
     global MAX_MSGS_LEN: u32 = 200;
+
+    #[event]
+    struct SuccessEvent {
+        sender: AztecAddress,
+        contract_address: AztecAddress,
+        id: Field,
+    }
 
     #[storage]
     struct Storage<Context> {
@@ -42,7 +56,12 @@ pub contract BusinessProgram {
     }
 
     #[external("public")]
-    fn check_public_values(allowed_url_matches_hashes: [Field; 2], H: EmbeddedCurvePoint) {
+    fn check_values_emit_event(
+        sender: AztecAddress,
+        contract_address: AztecAddress,
+        id: Field,
+        allowed_url_matches_hashes: [Field; 2], 
+        H: EmbeddedCurvePoint) {
         // Check allowed_url_matches_hashes are in storage
         let allowed_url_hashes: [Field; 3] = storage.allowed_url_hashes.read();
         for i in 0..2 {
@@ -59,22 +78,56 @@ pub contract BusinessProgram {
         // Check H equals the publicly known value
         let stored_H: EmbeddedCurvePoint = storage.H.read();
         assert(H == stored_H);
+
+        emit_event_in_public(
+            SuccessEvent { sender, contract_address, id },
+            &mut context,
+        );
     }
 
     // Check H equals the publicly known value
     // do asserts on msgs
     #[external("private")]
     fn verify(
+        public_key_x: [u8; 32],
+        public_key_y: [u8; 32],
+        hash: [u8; 32],
+        signature: [u8; 64],
+        request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
+        allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
+        coms: [EmbeddedCurvePoint; 7], // TODO dynamic size
+        rnds: [Field; 7], // TODO dynamic size
+        msgs_chunks: [Field; 7], // TODO dynamic size
         msgs: BoundedVec<u8, MAX_MSGS_LEN>,
-        H: EmbeddedCurvePoint,
-        allowed_url_matches_hashes: [Field; 2],
+        H: EmbeddedCurvePoint, // G is fixed, H is fixed per business case
+        // business_logic_address: AztecAddress,
+        id: Field,
     ) -> bool {
+        let allowed_url_matches_hashes: [Field; 2] = verify_attestation_comm(
+            public_key_x,
+            public_key_y,
+            hash,
+            signature,
+            request_urls,
+            allowed_urls,
+            coms,
+            rnds,
+            msgs_chunks,
+            msgs,
+            H,
+            id,
+        );
         // Check values
         // TODO what assert to do here?
         let (trailing_stop_order, limit_order) = get_values(msgs);
 
         BusinessProgram::at(context.this_address())
-            .check_public_values(allowed_url_matches_hashes, H)
+            .check_values_emit_event(
+                context.msg_sender().unwrap(),
+                context.this_address(),
+                id,
+                allowed_url_matches_hashes, 
+                H)
             .enqueue(&mut context);
 
         true

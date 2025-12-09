@@ -13,6 +13,12 @@ import BusinessProgramContractArtifactJson from './real_business_program-Busines
 export const BusinessProgramContractArtifact = loadContractArtifact(BusinessProgramContractArtifactJson as NoirCompiledContract);
 
 
+      export type SuccessEvent = {
+        sender: AztecAddressLike
+contract_address: AztecAddressLike
+id: FieldLike
+      }
+    
 
 /**
  * Type-safe interface for contract BusinessProgram;
@@ -108,8 +114,8 @@ H: {
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public declare methods: {
     
-    /** check_public_values(allowed_url_matches_hashes: array, H: struct) */
-    check_public_values: ((allowed_url_matches_hashes: FieldLike[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** check_values_emit_event(sender: struct, contract_address: struct, id: field, allowed_url_matches_hashes: array, H: struct) */
+    check_values_emit_event: ((sender: AztecAddressLike, contract_address: AztecAddressLike, id: FieldLike, allowed_url_matches_hashes: FieldLike[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** constructor(admin: struct, allowed_url_hashes: array, H: struct) */
     constructor: ((admin: AztecAddressLike, allowed_url_hashes: FieldLike[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
@@ -129,9 +135,60 @@ H: {
     /** update_allowed_url_hashes(allowed_url_hashes: array) */
     update_allowed_url_hashes: ((allowed_url_hashes: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** verify(msgs: struct, H: struct, allowed_url_matches_hashes: array) */
-    verify: ((msgs: (bigint | number)[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }, allowed_url_matches_hashes: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** verify(public_key_x: array, public_key_y: array, hash: array, signature: array, request_urls: array, allowed_urls: array, coms: array, rnds: array, msgs_chunks: array, msgs: struct, H: struct, id: field) */
+    verify: ((public_key_x: (bigint | number)[], public_key_y: (bigint | number)[], hash: (bigint | number)[], signature: (bigint | number)[], request_urls: (bigint | number)[][], allowed_urls: (bigint | number)[][], coms: { x: FieldLike, y: FieldLike, is_infinite: boolean }[], rnds: FieldLike[], msgs_chunks: FieldLike[], msgs: (bigint | number)[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }, id: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
   };
 
+  
+    public static get events(): { SuccessEvent: {abiType: AbiType, eventSelector: EventSelector, fieldNames: string[] } } {
+    return {
+      SuccessEvent: {
+        abiType: {
+    "kind": "struct",
+    "fields": [
+        {
+            "name": "sender",
+            "type": {
+                "kind": "struct",
+                "fields": [
+                    {
+                        "name": "inner",
+                        "type": {
+                            "kind": "field"
+                        }
+                    }
+                ],
+                "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
+            }
+        },
+        {
+            "name": "contract_address",
+            "type": {
+                "kind": "struct",
+                "fields": [
+                    {
+                        "name": "inner",
+                        "type": {
+                            "kind": "field"
+                        }
+                    }
+                ],
+                "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
+            }
+        },
+        {
+            "name": "id",
+            "type": {
+                "kind": "field"
+            }
+        }
+    ],
+    "path": "BusinessProgram::SuccessEvent"
+},
+        eventSelector: EventSelector.fromString("0x95b36ac7"),
+        fieldNames: ["sender","contract_address","id"],
+      }
+    };
+  }
   
 }
