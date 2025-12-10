@@ -114,6 +114,9 @@ H: {
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public declare methods: {
     
+    /** check_urls_emit_event(sender: struct, contract_address: struct, id: field, allowed_url_matches_hashes: array) */
+    check_urls_emit_event: ((sender: AztecAddressLike, contract_address: AztecAddressLike, id: FieldLike, allowed_url_matches_hashes: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
     /** check_values_emit_event(sender: struct, contract_address: struct, id: field, allowed_url_matches_hashes: array, H: struct) */
     check_values_emit_event: ((sender: AztecAddressLike, contract_address: AztecAddressLike, id: FieldLike, allowed_url_matches_hashes: FieldLike[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
@@ -137,6 +140,9 @@ H: {
 
     /** verify_comm(public_key_x: array, public_key_y: array, hash: array, signature: array, request_urls: array, allowed_urls: array, coms: array, rnds: array, msgs_chunks: array, msgs: struct, H: struct, id: field) */
     verify_comm: ((public_key_x: (bigint | number)[], public_key_y: (bigint | number)[], hash: (bigint | number)[], signature: (bigint | number)[], request_urls: (bigint | number)[][], allowed_urls: (bigint | number)[][], coms: { x: FieldLike, y: FieldLike, is_infinite: boolean }[], rnds: FieldLike[], msgs_chunks: FieldLike[], msgs: (bigint | number)[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }, id: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** verify_hash(public_key_x: array, public_key_y: array, hash: array, signature: array, request_urls: array, allowed_urls: array, data_hashes: array, plain_json_response_contents: array, id: field) */
+    verify_hash: ((public_key_x: (bigint | number)[], public_key_y: (bigint | number)[], hash: (bigint | number)[], signature: (bigint | number)[], request_urls: (bigint | number)[][], allowed_urls: (bigint | number)[][], data_hashes: (bigint | number)[][], plain_json_response_contents: (bigint | number)[][], id: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
   };
 
   

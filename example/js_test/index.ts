@@ -1,5 +1,5 @@
 import fs from "fs";
-import { parseAttestationData, hashUrlsWithPoseidon2 } from "att-verifier-parsing";
+import { parseAttestationData, parseHashingData, hashUrlsWithPoseidon2 } from "att-verifier-parsing";
 import { getInitialTestAccountsData } from "@aztec/accounts/testing";
 import { TestWallet } from "@aztec/test-wallet/server";
 import { getPXEConfig } from "@aztec/pxe/server";
@@ -12,8 +12,13 @@ import { getDecodedPublicEvents } from '@aztec/aztec.js/events';
 
 const MAX_RESPONSE_NUM = 2;
 const ALLOWED_URL = ["https://api.binance.com", "https://www.okx.com", "https://x.com"];
-const ATT_PATH = "testdata/attestation_data_grumpkin.json";
+const ATT_PATH_COMM = "testdata/attestation_data_grumpkin.json";
+const ATT_PATH_HASH = "testdata/eth_hash.json";
 const GRUMPKIN_BATCH_SIZE = 253;
+
+console.log("=".repeat(80));
+console.log("ATTESTATION VERIFICATION BENCHMARK");
+console.log("=".repeat(80));
 
 const node = createAztecNodeClient("http://localhost:8080");
 
@@ -25,19 +30,27 @@ const wallet = await TestWallet.create(node, config);
 const [aliceAccount] = await getInitialTestAccountsData();
 let alice = await wallet.createSchnorrAccount(aliceAccount.secret, aliceAccount.salt);
 
-// Load attestation testdata
-const attestationData = JSON.parse(fs.readFileSync(ATT_PATH, "utf-8"));
+const bb = await Barretenberg.new();
 
-// Parse attestation data using the library
-const parsed = parseAttestationData(attestationData, {
+// =============================================================================
+// TEST 1: COMMITMENT-BASED VERIFICATION
+// =============================================================================
+console.log("\n" + "=".repeat(80));
+console.log("TEST 1: COMMITMENT-BASED VERIFICATION (Pedersen)");
+console.log("=".repeat(80));
+
+// Load commitment attestation data
+const attestationDataComm = JSON.parse(fs.readFileSync(ATT_PATH_COMM, "utf-8"));
+
+console.log("\n[1/4] Parsing attestation data...");
+const parsedComm = parseAttestationData(attestationDataComm, {
   maxResponseNum: MAX_RESPONSE_NUM,
   allowedUrls: ALLOWED_URL,
   grumpkinBatchSize: GRUMPKIN_BATCH_SIZE,
 });
 
-// Hash allowed URLs using Poseidon2
-const bb = await Barretenberg.new();
-const hashedUrls = await hashUrlsWithPoseidon2(bb, parsed.allowedUrls, Fr);
+console.log("[2/4] Hashing allowed URLs...");
+const hashedUrlsComm = await hashUrlsWithPoseidon2(bb, parsedComm.allowedUrls, Fr);
 
 // Point H for Pedersen commitment
 let H = { 
@@ -46,55 +59,123 @@ let H = {
   is_infinite: false 
 };
 
-// Deploy business program contract
+console.log("[3/4] Deploying business program contract...");
 const businessProgram = await BusinessProgramContract.deploy(
   wallet, 
   alice.address, 
-  hashedUrls, 
+  hashedUrlsComm, 
   H
 )
   .send({ from: aliceAccount.address })
   .deployed();
+console.log("OK Contract deployed at:", businessProgram.address.toString());
 
-console.log("Deployed business program");
+console.log("[4/4] Verifying attestation with commitments...");
+const startComm = performance.now();
 
-// Verify attestation
-const start = performance.now();
-
-let result = await businessProgram.methods.verify_comm(
-  parsed.publicKeyX,
-  parsed.publicKeyY,
-  parsed.hash,
-  parsed.signature,
-  parsed.requestUrls,
-  parsed.allowedUrls,
-  parsed.commitments,
-  parsed.randomScalars,
-  parsed.msgsChunks,
-  parsed.msgs,
+let resultComm = await businessProgram.methods.verify_comm(
+  parsedComm.publicKeyX,
+  parsedComm.publicKeyY,
+  parsedComm.hash,
+  parsedComm.signature,
+  parsedComm.requestUrls,
+  parsedComm.allowedUrls,
+  parsedComm.commitments,
+  parsedComm.randomScalars,
+  parsedComm.msgsChunks,
+  parsedComm.msgs,
   H,
-  parsed.id
+  parsedComm.id
 ).send({ from: aliceAccount.address }).wait();
 
-const end = performance.now();
-const duration = (end - start).toFixed(2);
+const endComm = performance.now();
+const durationComm = (endComm - startComm).toFixed(2);
 
-console.log(result);
-console.log(`Verification call took ${duration} ms`);
+console.log("\n" + "-".repeat(80));
+console.log("COMMITMENT VERIFICATION RESULTS:");
+console.log("-".repeat(80));
+console.log("Status:", resultComm.status);
+console.log("Verification time:", durationComm, "ms");
+console.log("Block number:", resultComm.blockNumber);
 
-if (result.status != "success") {
+if (resultComm.status === "success") {
+  const success_event_comm = await getDecodedPublicEvents<SuccessEvent>(
+    node,
+    BusinessProgramContract.events.SuccessEvent,
+    resultComm.blockNumber!,
+    2
+  );
+  console.log("Success event:", success_event_comm.length > 0 ? "OK - Event emitted" : "Not found");
+} else {
   console.log("Verification failed");
 }
 
-// Get public event
-const success_event = await getDecodedPublicEvents<SuccessEvent>(
-  node,
-  BusinessProgramContract.events.SuccessEvent,
-  result.blockNumber!,
-  2
-);
+// =============================================================================
+// TEST 2: HASH-BASED VERIFICATION
+// =============================================================================
+console.log("\n" + "=".repeat(80));
+console.log("TEST 2: HASH-BASED VERIFICATION");
+console.log("=".repeat(80));
 
-console.log("Success event: ", success_event);
+// Load hashing attestation data
+const attestationDataHash = JSON.parse(fs.readFileSync(ATT_PATH_HASH, "utf-8"));
+
+console.log("\n[1/3] Parsing attestation data (hash approach)...");
+const parsedHash = parseHashingData(attestationDataHash, {
+  maxResponseNum: MAX_RESPONSE_NUM,
+  allowedUrls: ALLOWED_URL,
+  grumpkinBatchSize: GRUMPKIN_BATCH_SIZE,
+});
+
+console.log("[2/3] Hashing allowed URLs...");
+const hashedUrlsHash = await hashUrlsWithPoseidon2(bb, parsedHash.allowedUrls, Fr);
+
+console.log("[3/3] Verifying attestation with hashing...");
+const startHash = performance.now();
+
+let resultHash = await businessProgram.methods.verify_hash(
+  parsedHash.publicKeyX,
+  parsedHash.publicKeyY,
+  parsedHash.hash,
+  parsedHash.signature,
+  parsedHash.requestUrls,
+  parsedHash.allowedUrls,
+  parsedHash.dataHashes,
+  parsedHash.plainJsonResponses,
+  parsedHash.id
+).send({ from: aliceAccount.address }).wait();
+
+const endHash = performance.now();
+const durationHash = (endHash - startHash).toFixed(2);
+
+console.log("\n" + "-".repeat(80));
+console.log("HASH VERIFICATION RESULTS:");
+console.log("-".repeat(80));
+console.log("Status:", resultHash.status);
+console.log("Verification time:", durationHash, "ms");
+console.log("Block number:", resultHash.blockNumber);
+
+if (resultHash.status === "success") {
+  const success_event_hash = await getDecodedPublicEvents<SuccessEvent>(
+    node,
+    BusinessProgramContract.events.SuccessEvent,
+    resultHash.blockNumber!,
+    2
+  );
+  console.log("Success event:", success_event_hash.length > 0 ? "OK - Event emitted" : "Not found");
+} else {
+  console.log("Verification failed");
+}
+
+// =============================================================================
+// SUMMARY
+// =============================================================================
+console.log("\n" + "=".repeat(80));
+console.log("BENCHMARK SUMMARY");
+console.log("=".repeat(80));
+console.log(`Commitment-based verification: ${durationComm} ms`);
+console.log(`Hash-based verification:       ${durationHash} ms`);
+console.log("=".repeat(80));
 
 // Cleanup
 await bb.destroy();

@@ -149,6 +149,58 @@ export async function hashUrlsWithPoseidon2(
 }
 
 /**
+ * Hashing case utilities
+ */
+
+export function parseDataHashes(attestationData: any, maxResponseNum: number): number[][] {
+  const dataHashes: number[][] = [];
+  const attData = JSON.parse(attestationData);
+  
+  for (const [key, value] of Object.entries(attData)) {
+    // Support both uuid- and hash-of-response prefixes
+    if ((key.startsWith("uuid-") || key.startsWith("hash-of-response")) 
+        && typeof value === "string" 
+        && value.length === 64) {
+      const hashBytes = Array.from(Buffer.from(value as string, "hex"));
+      dataHashes.push(hashBytes);
+    }
+  }
+  
+  // Pad by repeating the last element
+  const diff = maxResponseNum - dataHashes.length;
+  const lastElement = dataHashes[dataHashes.length - 1];
+  for (let i = 0; i < diff; i++) {
+    dataHashes.push([...lastElement]);
+  }
+  
+  return dataHashes;
+}
+
+export function parsePlainJsonResponses(privateData: any, maxResponseNum: number): number[][] {
+  const plainJsonResponse: number[][] = [];
+  
+  if (privateData && privateData.plain_json_response && Array.isArray(privateData.plain_json_response)) {
+    for (const entry of privateData.plain_json_response) {
+      if (entry.id && entry.content) {
+        const jsonBytes = Array.from(new TextEncoder().encode(entry.content));
+        plainJsonResponse.push(jsonBytes);
+      }
+    }
+  }
+  
+  // Pad by repeating the last element
+  if (plainJsonResponse.length > 0) {
+    const diff = maxResponseNum - plainJsonResponse.length;
+    const lastElement = plainJsonResponse[plainJsonResponse.length - 1];
+    for (let i = 0; i < diff; i++) {
+      plainJsonResponse.push([...lastElement]);
+    }
+  }
+  
+  return plainJsonResponse;
+}
+
+/**
  * Simple conversion utilities
  */
 

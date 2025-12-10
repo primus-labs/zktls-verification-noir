@@ -1,8 +1,8 @@
 use dep::aztec::macros::aztec;
 #[aztec]
 pub contract BusinessProgram {
-    use dep::json_parser::JSON512b;
-    use att_verifier_lib::verify_attestation_comm;
+    use dep::json_parser::{JSON2kb, JSON512b};
+    use att_verifier_lib::{verify_attestation_comm, verify_attestation_hashing};
     use aztec::{
         event::event_emission::emit_event_in_public,
         macros::{events::event, functions::{external, initializer, internal}},
@@ -80,6 +80,29 @@ pub contract BusinessProgram {
         emit_event_in_public(SuccessEvent { sender, contract_address, id }, &mut context);
     }
 
+    #[external("public")]
+    fn check_urls_emit_event(
+        sender: AztecAddress,
+        contract_address: AztecAddress,
+        id: Field,
+        allowed_url_matches_hashes: [Field; 2],
+    ) {
+        // Check allowed_url_matches_hashes are in storage
+        let allowed_url_hashes: [Field; 3] = storage.allowed_url_hashes.read();
+        for i in 0..2 {
+            let check_hash = allowed_url_matches_hashes[i];
+            let mut found = false;
+            for j in 0..3 {
+                if allowed_url_hashes[j] == check_hash {
+                    found = true;
+                }
+            }
+            assert(found);
+        }
+
+        emit_event_in_public(SuccessEvent { sender, contract_address, id }, &mut context);
+    }
+
     // Check H equals the publicly known value
     // do asserts on msgs
     #[external("private")]
@@ -128,6 +151,49 @@ pub contract BusinessProgram {
         true
     }
 
+    #[external("private")]
+    fn verify_hash(
+        public_key_x: [u8; 32],
+        public_key_y: [u8; 32],
+        hash: [u8; 32],
+        signature: [u8; 64],
+        request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
+        allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
+        data_hashes: [[u8; 32]; 2],
+        plain_json_response_contents: [BoundedVec<u8, MAX_CONTENT_LEN>; 2],
+        id: Field, // id for this attestation
+    ) -> bool {
+        let allowed_url_matches_hashes: [Field; 2] = verify_attestation_hashing(
+            public_key_x,
+            public_key_y,
+            hash,
+            signature,
+            request_urls,
+            allowed_urls,
+            data_hashes,
+            plain_json_response_contents,
+            id,
+        );
+
+        for i in 0..2 {
+            // Parse plaintext to JSON and obtain the custom values we want to check
+            let (base_ccy, inst_id_code) = get_values2(plain_json_response_contents[i]);
+
+            // TODO what to assert about base_ccy and inst_id_code
+        }
+
+        BusinessProgram::at(context.this_address())
+            .check_urls_emit_event(
+                context.msg_sender().unwrap(),
+                context.this_address(),
+                id,
+                allowed_url_matches_hashes,
+            )
+            .enqueue(&mut context);
+
+        true
+    }
+
     #[contract_library_method]
     fn get_values(plaintext: BoundedVec<u8, MAX_MSGS_LEN>) -> (bool, bool) {
         let json = JSON512b::parse_bounded_vec_json(plaintext);
@@ -140,6 +206,22 @@ pub contract BusinessProgram {
         let limit_order = json.get_literal(key1).unwrap();
 
         (trailing_stop_order.to_bool(), limit_order.to_bool())
+    }
+
+    #[contract_library_method]
+    fn get_values2(plaintext: BoundedVec<u8, MAX_CONTENT_LEN>) -> (u64, BoundedVec<u8, 10>) {
+        let json = JSON2kb::parse_bounded_vec_json(plaintext);
+        // for eth_hash.json
+        let key0: BoundedVec<u8, 15> = BoundedVec::from_array("makerCommission".as_bytes());
+        let maker_commission = json.get_number(key0).unwrap();
+
+        let key1: BoundedVec<u8, 15> = BoundedVec::from_array("commissionRates".as_bytes());
+        let commission_rate_obj: JSON2kb = json.get_object(key1).unwrap();
+
+        let key2: BoundedVec<u8, 5> = BoundedVec::from_array("maker".as_bytes());
+        let maker_rate_str: BoundedVec<u8, 10> =
+            commission_rate_obj.get_string_from_path([key2]).unwrap();
+        (maker_commission, maker_rate_str)
     }
 
 }

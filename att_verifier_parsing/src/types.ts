@@ -35,13 +35,17 @@ export interface PublicData {
 }
 
 export interface PrivateData {
-  random: string[];
-  content: string;
+  random?: string[];
+  content?: string;
+  plain_json_response?: Array<{
+    id: string;
+    content: string;
+  }>;
 }
 
 export interface AttestationFile {
   public_data: PublicData[];
-  private_data: PrivateData[];
+  private_data: PrivateData[] | PrivateData;
 }
 
 export interface Point {
@@ -67,6 +71,19 @@ export interface ParsedAttestationData {
   randomScalars: bigint[];
   msgsChunks: bigint[];
   msgs: number[];
+  id: number;
+  attestationData: any;
+}
+
+export interface ParsedHashingData {
+  publicKeyX: number[];
+  publicKeyY: number[];
+  hash: number[];
+  signature: number[];
+  requestUrls: number[][];
+  allowedUrls: number[][];
+  dataHashes: number[][];
+  plainJsonResponses: number[][];
   id: number;
   attestationData: any;
 }
