@@ -138,7 +138,7 @@ H: {
     /** update_allowed_url_hashes(allowed_url_hashes: array) */
     update_allowed_url_hashes: ((allowed_url_hashes: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** verify_comm(public_key_x: array, public_key_y: array, hash: array, signature: array, request_urls: array, allowed_urls: array, coms: array, rnds: array, msgs_chunks: array, msgs: struct, H: struct, id: field) */
+    /** verify_comm(public_key_x: array, public_key_y: array, hash: array, signature: array, request_urls: array, allowed_urls: array, coms: struct, rnds: struct, msgs_chunks: struct, msgs: struct, H: struct, id: field) */
     verify_comm: ((public_key_x: (bigint | number)[], public_key_y: (bigint | number)[], hash: (bigint | number)[], signature: (bigint | number)[], request_urls: (bigint | number)[][], allowed_urls: (bigint | number)[][], coms: { x: FieldLike, y: FieldLike, is_infinite: boolean }[], rnds: FieldLike[], msgs_chunks: FieldLike[], msgs: (bigint | number)[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }, id: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** verify_hash(public_key_x: array, public_key_y: array, hash: array, signature: array, request_urls: array, allowed_urls: array, data_hashes: array, plain_json_response_contents: array, id: field) */

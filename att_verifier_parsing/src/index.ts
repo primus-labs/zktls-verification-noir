@@ -57,7 +57,12 @@ export function parseAttestationData(
 
   // Step 4: Parse attestation data
   const attDataParsed = JSON.parse(publicData.attestation.data);
-  const verificationArray = JSON.parse(attDataParsed["#verification_id"]);
+  
+  if (!attDataParsed["#grumpkin"]) {
+    throw new Error("#grumpkin field not found in attestation data");
+  }
+  
+  const verificationArray = JSON.parse(attDataParsed["#grumpkin"]);
 
   // Step 5: Parse commitments and randoms
   const commitments = parseCommitments(verificationArray);
@@ -70,14 +75,22 @@ export function parseAttestationData(
   );
 
   // Step 7: Extract reveal string for msgs array
+  if (!attDataParsed["#reveal_id"]) {
+    throw new Error("#reveal_id field not found in attestation data");
+  }
+  
   let revealJsonRaw = attDataParsed["#reveal_id"];
+  
+  // #reveal_id is a JSON string, parse it
   if (typeof revealJsonRaw === "string") {
     try {
       revealJsonRaw = JSON.parse(revealJsonRaw);
-    } catch {
-      throw new Error("Invalid JSON in #reveal_id");
+    } catch (e) {
+      throw new Error(`Failed to parse #reveal_id: ${e}`);
     }
   }
+  
+  // Convert the parsed object back to JSON string for msgs
   const revealStr = JSON.stringify(revealJsonRaw);
   const msgs = Array.from(Buffer.from(revealStr, "utf8"));
 

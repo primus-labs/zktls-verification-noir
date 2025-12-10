@@ -4,6 +4,7 @@ import { getInitialTestAccountsData } from "@aztec/accounts/testing";
 import { TestWallet } from "@aztec/test-wallet/server";
 import { getPXEConfig } from "@aztec/pxe/server";
 import { BusinessProgramContract, SuccessEvent } from "./bindings/BusinessProgram.js";
+import { BusinessProgramSmallCommContract, SuccessEvent as SuccessEventSmallComm } from "./bindings/BusinessProgramSmallComm.js";
 import { performance } from "perf_hooks";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { rm } from "node:fs/promises";
@@ -13,6 +14,7 @@ import { getDecodedPublicEvents } from '@aztec/aztec.js/events';
 const MAX_RESPONSE_NUM = 2;
 const ALLOWED_URL = ["https://api.binance.com", "https://www.okx.com", "https://x.com"];
 const ATT_PATH_COMM = "testdata/attestation_data_grumpkin.json";
+const ATT_PATH_COMM_SMALL = "testdata/attestation_data_grumpkin_small.json";
 const ATT_PATH_HASH = "testdata/eth_hash.json";
 const GRUMPKIN_BATCH_SIZE = 253;
 
@@ -60,7 +62,7 @@ let H = {
 };
 
 console.log("[3/4] Deploying business program contract...");
-const businessProgram = await BusinessProgramContract.deploy(
+const businessProgramComm = await BusinessProgramContract.deploy(
   wallet, 
   alice.address, 
   hashedUrlsComm, 
@@ -68,12 +70,12 @@ const businessProgram = await BusinessProgramContract.deploy(
 )
   .send({ from: aliceAccount.address })
   .deployed();
-console.log("OK Contract deployed at:", businessProgram.address.toString());
+console.log("Contract deployed at:", businessProgramComm.address.toString());
 
 console.log("[4/4] Verifying attestation with commitments...");
 const startComm = performance.now();
 
-let resultComm = await businessProgram.methods.verify_comm(
+let resultComm = await businessProgramComm.methods.verify_comm(
   parsedComm.publicKeyX,
   parsedComm.publicKeyY,
   parsedComm.hash,
@@ -111,6 +113,77 @@ if (resultComm.status === "success") {
 }
 
 // =============================================================================
+// TEST 1b: COMMITMENT-BASED VERIFICATION (SMALL)
+// =============================================================================
+console.log("\n" + "=".repeat(80));
+console.log("TEST 1b: COMMITMENT-BASED VERIFICATION (SMALL)");
+console.log("=".repeat(80));
+
+// Load small commitment attestation data
+const attestationDataCommSmall = JSON.parse(fs.readFileSync(ATT_PATH_COMM_SMALL, "utf-8"));
+
+console.log("\n[1/2] Parsing attestation data (small)...");
+const parsedCommSmall = parseAttestationData(attestationDataCommSmall, {
+  maxResponseNum: MAX_RESPONSE_NUM,
+  allowedUrls: ALLOWED_URL,
+  grumpkinBatchSize: GRUMPKIN_BATCH_SIZE,
+});
+
+console.log("[2/4] Hashing allowed URLs...");
+const hashedUrlsCommSmall = await hashUrlsWithPoseidon2(bb, parsedCommSmall.allowedUrls, Fr);
+
+console.log("[3/4] Deploying business program contract (small)...");
+const businessProgramSmallComm = await BusinessProgramSmallCommContract.deploy(
+  wallet, 
+  alice.address, 
+  hashedUrlsCommSmall, 
+  H
+)
+  .send({ from: aliceAccount.address })
+  .deployed();
+console.log("Contract deployed at:", businessProgramSmallComm.address.toString());
+
+console.log("[4/4] Verifying attestation with commitments (small)...");
+const startCommSmall = performance.now();
+
+let resultCommSmall = await businessProgramSmallComm.methods.verify_comm(
+  parsedCommSmall.publicKeyX,
+  parsedCommSmall.publicKeyY,
+  parsedCommSmall.hash,
+  parsedCommSmall.signature,
+  parsedCommSmall.requestUrls,
+  parsedCommSmall.allowedUrls,
+  parsedCommSmall.commitments,
+  parsedCommSmall.randomScalars,
+  parsedCommSmall.msgsChunks,
+  parsedCommSmall.msgs,
+  H,
+  parsedCommSmall.id
+).send({ from: aliceAccount.address }).wait();
+
+const endCommSmall = performance.now();
+const durationCommSmall = (endCommSmall - startCommSmall).toFixed(2);
+
+console.log("\n" + "-".repeat(80));
+console.log("COMMITMENT VERIFICATION RESULTS (SMALL):");
+console.log("-".repeat(80));
+console.log("Status:", resultCommSmall.status);
+console.log("Verification time:", durationCommSmall, "ms");
+console.log("Block number:", resultCommSmall.blockNumber);
+
+if (resultCommSmall.status === "success") {
+  const success_event_comm_small = await getDecodedPublicEvents<SuccessEventSmallComm>(
+    node,
+    BusinessProgramSmallCommContract.events.SuccessEvent,
+    resultCommSmall.blockNumber!,
+    2
+  );
+  console.log("Success event:", success_event_comm_small.length > 0 ? "OK - Event emitted" : "Not found");
+} else {
+  console.log("Verification failed");
+}
+
+// =============================================================================
 // TEST 2: HASH-BASED VERIFICATION
 // =============================================================================
 console.log("\n" + "=".repeat(80));
@@ -133,7 +206,7 @@ const hashedUrlsHash = await hashUrlsWithPoseidon2(bb, parsedHash.allowedUrls, F
 console.log("[3/3] Verifying attestation with hashing...");
 const startHash = performance.now();
 
-let resultHash = await businessProgram.methods.verify_hash(
+let resultHash = await businessProgramComm.methods.verify_hash(
   parsedHash.publicKeyX,
   parsedHash.publicKeyY,
   parsedHash.hash,
@@ -173,8 +246,9 @@ if (resultHash.status === "success") {
 console.log("\n" + "=".repeat(80));
 console.log("BENCHMARK SUMMARY");
 console.log("=".repeat(80));
-console.log(`Commitment-based verification: ${durationComm} ms`);
-console.log(`Hash-based verification:       ${durationHash} ms`);
+console.log(`Commitment-based verification:       ${durationComm} ms`);
+console.log(`Commitment-based verification (small): ${durationCommSmall} ms`);
+console.log(`Hash-based verification:             ${durationHash} ms`);
 console.log("=".repeat(80));
 
 // Cleanup

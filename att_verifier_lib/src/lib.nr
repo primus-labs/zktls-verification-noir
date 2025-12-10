@@ -7,23 +7,19 @@ use std::embedded_curve_ops::{
 use string_search::{StringBody, StringBody1024, SubString, SubString1024};
 
 global MAX_URL_LEN: u32 = 1024;
-global MAX_MSGS_LEN: u32 = 200; // TODO increase to 2kb
 global MAX_CONTENT_LEN: u32 = 1000;
 
-pub fn verify_attestation_comm(
+pub fn verify_attestation_comm<let MAX_COMMS: u32>(
     public_key_x: [u8; 32],
     public_key_y: [u8; 32],
     hash: [u8; 32],
     signature: [u8; 64],
     request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
     allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
-    coms: [EmbeddedCurvePoint; 7], // TODO dynamic size
-    rnds: [Field; 7], // TODO dynamic size
-    msgs_chunks: [Field; 7], // TODO dynamic size
-    msgs: BoundedVec<u8, MAX_MSGS_LEN>,
+    coms: BoundedVec<EmbeddedCurvePoint, MAX_COMMS>,
+    rnds: BoundedVec<Field, MAX_COMMS>,
+    msgs_chunks: BoundedVec<Field, MAX_COMMS>,
     H: EmbeddedCurvePoint, // G is fixed, H is fixed per business case
-    // business_logic_address: AztecAddress,
-    id: Field, // id for this attestation
 ) -> [Field; 2] {
     // 1. Check signature
     assert(std::ecdsa_secp256k1::verify_signature(public_key_x, public_key_y, signature, hash));
@@ -55,14 +51,16 @@ pub fn verify_attestation_comm(
     }
 
     // 3. Check commitments
-    for i in 0..7 {
-        assert(
-            embedded_curve_add(
-                fixed_base_scalar_mul(EmbeddedCurveScalar::from_field(msgs_chunks[i])),
-                multi_scalar_mul([H], [EmbeddedCurveScalar::from_field(rnds[i])]),
-            )
-                == coms[i],
-        );
+    for i in 0..MAX_COMMS {
+        if i < coms.len() {
+            assert(
+                embedded_curve_add(
+                    fixed_base_scalar_mul(EmbeddedCurveScalar::from_field(msgs_chunks.get(i))),
+                    multi_scalar_mul([H], [EmbeddedCurveScalar::from_field(rnds.get(i))]),
+                )
+                    == coms.get(i),
+            );
+        }
     }
 
     allowed_url_matches
@@ -77,8 +75,6 @@ pub fn verify_attestation_hashing(
     allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
     data_hashes: [[u8; 32]; 2],
     plain_json_response_contents: [BoundedVec<u8, MAX_CONTENT_LEN>; 2],
-    // business_logic_address: AztecAddress,
-    id: Field, // id for this attestation
 ) -> [Field; 2] {
     // 1. Check signature
     assert(std::ecdsa_secp256k1::verify_signature(public_key_x, public_key_y, signature, hash));
