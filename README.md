@@ -1,6 +1,6 @@
 # Primus Attestation Logic Verifier Contracts
 
-## Workflow
+<!-- ## Workflow
 
 Based on:
 https://hackmd.io/zIFf5ChpRfGcT60e2KCRAQ?stext=1549%3A62%3A0%3A1759918279%3AuB_AXk&view=
@@ -37,26 +37,26 @@ JS scripts to deploy and interact with the contracts
 
 This flow works with the Aztec Sandbox version `3.0.0-nightly20251017`. Follow the documentation [here](https://docs.aztec.network/nightly/developers/getting_started_on_sandbox) to install the sandbox.
 
-This version of the sandbox contains fixes that allows the analysis via [flamegraph](https://docs.aztec.network/nightly/developers/docs/guides/smart_contracts/advanced/writing_efficient_contracts#inspecting-with-flamegraph) of the circuit. Version 2.0.2 has a bug in that functionality. 
+This version of the sandbox contains fixes that allows the analysis via [flamegraph](https://docs.aztec.network/nightly/developers/docs/guides/smart_contracts/advanced/writing_efficient_contracts#inspecting-with-flamegraph) of the circuit. Version 2.0.2 has a bug in that functionality.  -->
 
-## QuickStart
+## Run example
 1. Start an Aztec sandbox 
 ```
 PXE_PROVER_ENABLED=1 aztec start --sandbox
 ```
-2. compile att_verifier and real_business_program
+2. compile real_business_program and small_comm_business_program
 ```
-# inside att_verifier
-aztec-nargo compile
-aztec-postprocess-contract
-aztec codegen -o src/artifacts target
-
 # inside real_business_program
 aztec-nargo compile
 aztec-postprocess-contract
 aztec codegen -o src/artifacts target
+
+# inside small_comm_business_program
+aztec-nargo compile
+aztec-postprocess-contract
+aztec codegen -o src/artifacts target
 ```
-3. move `---.ts` in `src/artifacts/` and `---.json` in `target` from both `att_verifier` and `real_budiness_program` to `js_test/bindings/`. (Update the import path in `---.ts` for the jsons)
+3. move `---.ts` in `src/artifacts/` and `---.json` in `target` from both `real_business_program` and `small_comm_business_program` to `js_test/bindings/`. (Update the import path in `---.ts` for the jsons)
 
 4. run script
 ```
@@ -66,13 +66,8 @@ yarn
 # e2e test
 yarn start
 
-# deploy contract only
-yarn start:deploy
-
-# send tx to a deploied contract
-yarn start:verify
 ```
-
+<!-- 
 ## Adjust business logic
 
 The current demo in `js_test` and specific business implementation in `real_business_program` takes `js_test/test_data/attestation_data.json` and:
@@ -164,4 +159,4 @@ Opcode count: 71055, Total gates by opcodes: 546716, Circuit size: 550167
 
 Opcode count: 190939, Total gates by opcodes: 346369, Circuit size: 356400
 
-For flamegraphs of both functions, see `att_verifier-AttVerifier-verify_attestation-flamegraph.svg` and `real_business_program-BusinessProgram-verify-flamegraph.svg`. Note that these can be obtained following [these steps](https://docs.aztec.network/nightly/developers/docs/guides/smart_contracts/advanced/writing_efficient_contracts#inspecting-with-flamegraph). 
+For flamegraphs of both functions, see `att_verifier-AttVerifier-verify_attestation-flamegraph.svg` and `real_business_program-BusinessProgram-verify-flamegraph.svg`. Note that these can be obtained following [these steps](https://docs.aztec.network/nightly/developers/docs/guides/smart_contracts/advanced/writing_efficient_contracts#inspecting-with-flamegraph).  -->
