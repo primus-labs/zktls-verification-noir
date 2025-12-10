@@ -1,0 +1,66 @@
+{
+  "verification_type": "HASH_COMPARSION",
+  "public_data": [
+    {
+      "attestation": {
+        "recipient": "0x810b7bacEfD5ba495bB688bbFD2501C904036AB7",
+        "request": [
+          {
+            "url": "https://www.okx.com/api/v5/public/instruments?instType=SPOT&instId=BTC-USD",
+            "header": "",
+            "method": "GET",
+            "body": ""
+          },
+          {
+            "url": "https://www.okx.com/api/v5/public/instruments?instType=SPOT&instId=ETH-USD",
+            "header": "",
+            "method": "GET",
+            "body": ""
+          }
+        ],
+        "responseResolves": [
+          {
+            "oneUrlResponseResolve": [
+              {
+                "keyName": "uuid-0",
+                "parseType": "",
+                "parsePath": "$"
+              }
+            ]
+          },
+          {
+            "oneUrlResponseResolve": [
+              {
+                "keyName": "uuid-1",
+                "parseType": "",
+                "parsePath": "$"
+              }
+            ]
+          }
+        ],
+        "data": "{\"uuid-0\":\"6ba84bc1417c1d91f6c69467dbc3a96c741ff878e62a06cb4f876bad2cf4809c\",\"uuid-0.count\":\"1\",\"uuid-1\":\"3ef874d4392f9d7fd729f0bfce663eb8727000a1231e8bf739e087f73feb3316\",\"uuid-1.count\":\"1\",\"SHA256($)\":\"3ef874d4392f9d7fd729f0bfce663eb8727000a1231e8bf739e087f73feb3316\"}",
+        "attConditions": "[{\"op\":\"SHA256\",\"field\":\"$\"},{\"op\":\"SHA256\",\"field\":\"$\"}]",
+        "timestamp": 1761097404246,
+        "additionParams": "{\"algorithmType\":\"mpctls\"}"
+      },
+      "attestor": "0x22e1dbbcb3dacdbf7e1ff44cf15ecaf24f5bd6ee",
+      "signature": "0x19c1ab8e0272865a28208dc821bcb5246a1c4f7a5c90e50b9f69036fe47919167a492ab796f5864c85529b11a3afc460eb1b588bb99e25854e164cdc47078db91b",
+      "reportTxHash": "0x50a16f30b77c11a32b43be79cd4585bedd29ad10d11c50a3753367db17ea569e",
+      "taskId": "0xb07b7a633cce3a4f811eb200d750eb9029c6d82fecc8887d18c7c741410d1d0c",
+      "attestationTime": 34586,
+      "attestorUrl": "6f5a4e590245bc06cf7fd0334939615ec300cf8b-18080.dstack-base-prod7.phala.network"
+    }
+  ],
+  "private_data": {
+    "plain_json_response": [
+      {
+          "id": "uuid-0",
+          "content": "{\"code\":\"0\",\"data\":[{\"alias\":\"\",\"auctionEndTime\":\"\",\"baseCcy\":\"BTC\",\"category\":\"1\",\"contTdSwTime\":\"\",\"ctMult\":\"\",\"ctType\":\"\",\"ctVal\":\"\",\"ctValCcy\":\"\",\"expTime\":\"\",\"futureSettlement\":false,\"instFamily\":\"\",\"instId\":\"BTC-USD\",\"instIdCode\":187360,\"instType\":\"SPOT\",\"lever\":\"\",\"listTime\":\"1733454000000\",\"lotSz\":\"0.00000001\",\"maxIcebergSz\":\"9999999999.0000000000000000\",\"maxLmtAmt\":\"20000000\",\"maxLmtSz\":\"9999999999\",\"maxMktAmt\":\"120000\",\"maxMktSz\":\"1000000\",\"maxPlatOILmt\":\"\",\"maxStopSz\":\"1000000\",\"maxTriggerSz\":\"9999999999.0000000000000000\",\"maxTwapSz\":\"9999999999.0000000000000000\",\"minSz\":\"0.0001\",\"openType\":\"fix_price\",\"optType\":\"\",\"posLmtAmt\":\"\",\"posLmtPct\":\"\",\"preMktSwTime\":\"\",\"quoteCcy\":\"USD\",\"ruleType\":\"normal\",\"settleCcy\":\"\",\"state\":\"live\",\"stk\":\"\",\"tickSz\":\"0.1\",\"tradeQuoteCcyList\":[\"USDG\",\"USD\",\"USDC\"],\"uly\":\"\"}],\"msg\":\"\"}"
+      },
+      {
+          "id": "uuid-1",
+          "content": "{\"code\":\"0\",\"data\":[{\"alias\":\"\",\"auctionEndTime\":\"\",\"baseCcy\":\"ETH\",\"category\":\"1\",\"contTdSwTime\":\"\",\"ctMult\":\"\",\"ctType\":\"\",\"ctVal\":\"\",\"ctValCcy\":\"\",\"expTime\":\"\",\"futureSettlement\":false,\"instFamily\":\"\",\"instId\":\"ETH-USD\",\"instIdCode\":187183,\"instType\":\"SPOT\",\"lever\":\"\",\"listTime\":\"1733455800000\",\"lotSz\":\"0.000001\",\"maxIcebergSz\":\"999999999999.0000000000000000\",\"maxLmtAmt\":\"20000000\",\"maxLmtSz\":\"999999999999\",\"maxMktAmt\":\"740000\",\"maxMktSz\":\"1000000\",\"maxPlatOILmt\":\"\",\"maxStopSz\":\"1000000\",\"maxTriggerSz\":\"999999999999.0000000000000000\",\"maxTwapSz\":\"999999999999.0000000000000000\",\"minSz\":\"0.001\",\"openType\":\"fix_price\",\"optType\":\"\",\"posLmtAmt\":\"\",\"posLmtPct\":\"\",\"preMktSwTime\":\"\",\"quoteCcy\":\"USD\",\"ruleType\":\"normal\",\"settleCcy\":\"\",\"state\":\"live\",\"stk\":\"\",\"tickSz\":\"0.01\",\"tradeQuoteCcyList\":[\"USDG\",\"USD\",\"USDC\"],\"uly\":\"\"}],\"msg\":\"\"}"
+      }
+    ]
+  }
+}

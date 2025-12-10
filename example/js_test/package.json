@@ -1,0 +1,26 @@
+{
+  "name": "js_test",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "@aztec/accounts": "3.0.0-devnet.5",
+    "@aztec/aztec.js": "3.0.0-devnet.5",
+    "@aztec/bb.js": "3.0.0-devnet.5",
+    "@aztec/kv-store": "3.0.0-devnet.5",
+    "@aztec/noir-contracts.js": "3.0.0-devnet.5",
+    "@aztec/pxe": "3.0.0-devnet.5",
+    "@aztec/test-wallet": "3.0.0-devnet.5",
+    "@types/node": "^24.7.0",
+    "att-verifier-parsing": "file:../../att_verifier_parsing",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "tsx index.ts",
+    "start:deploy": "tsx deploy.ts",
+    "start:verify": "tsx verify_att.ts"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+}
