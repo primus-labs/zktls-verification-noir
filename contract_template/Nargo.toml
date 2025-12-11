@@ -1,9 +1,9 @@
 [package]
-name = "real_business_program"
+name = "contract_template"
 type = "contract"
-authors = ["HashCloak"]
+authors = [""]
 
 [dependencies]
 aztec = { git = "https://github.com/AztecProtocol/aztec-packages/", tag = "v3.0.0-devnet.5", directory = "noir-projects/aztec-nr/aztec" }
 json_parser = { git="https://github.com/hashcloak/noir_json_parser", tag="v0.4.1-hc.4" }
-att_verifier_lib = { path = "../../att_verifier_lib" }
+att_verifier_lib = { path = "../att_verifier_lib" }

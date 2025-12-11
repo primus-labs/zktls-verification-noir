@@ -1,8 +1,21 @@
 use dep::aztec::macros::aztec;
+
+/**
+  * An Aztec smart contract template for usage of Primus Noir.
+  * This smart contract can verify 2 types of attestations from Primus:
+  * 1) Commitment-based attestations, via the `verify_comm` function.
+  * 2) Hashing-based attestations, via the `verify_hash` function.
+  *
+  * In both cases, upon successful verification of the attestation, an event is emitted.
+  *
+  * Note that the point H in storage is only needed for commitment-based attestations. 
+  * 
+  * TODO: Add the custom checks on the attested data in the verification function(s).
+  * For this, you might want to use the json_parser library. 
+  */
 #[aztec]
-pub contract BusinessProgramSmallComm {
-    use dep::json_parser::JSON512b;
-    use att_verifier_lib::verify_attestation_comm;
+pub contract BusinessProgram {
+    use att_verifier_lib::{verify_attestation_comm, verify_attestation_hashing};
     use aztec::{
         event::event_emission::emit_event_in_public,
         macros::{events::event, functions::{external, initializer}},
@@ -13,8 +26,9 @@ pub contract BusinessProgramSmallComm {
     use std::embedded_curve_ops::EmbeddedCurvePoint;
 
     global MAX_URL_LEN: u32 = 1024;
-    global MAX_MSGS_LEN: u32 = 50;
-    global MAX_COMMS: u32 = 1;
+    global MAX_MSGS_LEN: u32 = 2054;
+    global MAX_CONTENT_LEN: u32 = 1000;
+    global MAX_COMMS: u32 = 65;
 
     #[event]
     struct SuccessEvent {
@@ -25,17 +39,22 @@ pub contract BusinessProgramSmallComm {
 
     #[storage]
     struct Storage<Context> {
+        // Admin address that can update allowed_url_hashes
         admin: PublicMutable<AztecAddress, Context>,
+        // Hashes of allowed URLs (storing complete URLs was too large for contract storage)
         allowed_url_hashes: PublicMutable<[Field; 3], Context>,
+        // Point H used in commitment verification
         H: PublicImmutable<EmbeddedCurvePoint, Context>,
     }
 
+    // Set admin that is allowed to adjust allowed_url_hashes
     #[external("public")]
     fn set_admin(new_admin: AztecAddress) {
         assert(storage.admin.read().eq(context.msg_sender().unwrap()), "caller is not admin");
         storage.admin.write(new_admin);
     }
 
+    // Contract constructor
     #[initializer]
     #[external("public")]
     fn constructor(admin: AztecAddress, allowed_url_hashes: [Field; 3], H: EmbeddedCurvePoint) {
@@ -45,13 +64,17 @@ pub contract BusinessProgramSmallComm {
         storage.H.initialize(H);
     }
 
-    // TODO - allow update single url with index?
+    // Update allowed_url_hashes (only callable by admin)
     #[external("public")]
     fn update_allowed_url_hashes(allowed_url_hashes: [Field; 3]) {
         assert(storage.admin.read().eq(context.msg_sender().unwrap()), "caller is not admin");
         storage.allowed_url_hashes.write(allowed_url_hashes);
     }
 
+    // Check:
+    // - allowed_url_matches_hashes are in storage
+    // - H matches stored H
+    // then emit (public) Success event
     #[external("public")]
     fn check_values_emit_event(
         sender: AztecAddress,
@@ -80,9 +103,34 @@ pub contract BusinessProgramSmallComm {
         emit_event_in_public(SuccessEvent { sender, contract_address, id }, &mut context);
     }
 
-    // Check H equals the publicly known value
-    // do asserts on msgs
-    // Opcode count: 57636, Total gates by opcodes: 316323, Circuit size: 321513
+    // Check:
+    // - allowed_url_matches_hashes are in storage
+    // then emit (public) Success event
+    #[external("public")]
+    fn check_urls_emit_event(
+        sender: AztecAddress,
+        contract_address: AztecAddress,
+        id: Field,
+        allowed_url_matches_hashes: [Field; 2],
+    ) {
+        // Check allowed_url_matches_hashes are in storage
+        let allowed_url_hashes: [Field; 3] = storage.allowed_url_hashes.read();
+        for i in 0..2 {
+            let check_hash = allowed_url_matches_hashes[i];
+            let mut found = false;
+            for j in 0..3 {
+                if allowed_url_hashes[j] == check_hash {
+                    found = true;
+                }
+            }
+            assert(found);
+        }
+
+        emit_event_in_public(SuccessEvent { sender, contract_address, id }, &mut context);
+    }
+
+    // Verify commitment-based attestation and emit event upon success
+    // TODO: insert here your own checks on msgs
     #[external("private")]
     fn verify_comm(
         public_key_x: [u8; 32],
@@ -110,11 +158,10 @@ pub contract BusinessProgramSmallComm {
             msgs_chunks,
             H,
         );
-        // Check value
-        // TODO what assert to do here?
-        let val = get_value(msgs);
 
-        BusinessProgramSmallComm::at(context.this_address())
+        // TODO insert checks on msgs
+
+        BusinessProgram::at(context.this_address())
             .check_values_emit_event(
                 context.msg_sender().unwrap(),
                 context.this_address(),
@@ -127,19 +174,42 @@ pub contract BusinessProgramSmallComm {
         true
     }
 
-    #[contract_library_method]
-    fn get_value(plaintext: BoundedVec<u8, MAX_MSGS_LEN>) -> BoundedVec<u8, 20> {
-        let json = JSON512b::parse_bounded_vec_json(plaintext);
+    // Verify hashing-based attestation and emit event upon success
+    // TODO: insert here your own checks on plain_json_response_contents
+    #[external("private")]
+    fn verify_hash(
+        public_key_x: [u8; 32],
+        public_key_y: [u8; 32],
+        hash: [u8; 32],
+        signature: [u8; 64],
+        request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
+        allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
+        data_hashes: [[u8; 32]; 2],
+        plain_json_response_contents: [BoundedVec<u8, MAX_CONTENT_LEN>; 2],
+        id: Field, // id for this attestation
+    ) -> bool {
+        let allowed_url_matches_hashes: [Field; 2] = verify_attestation_hashing(
+            public_key_x,
+            public_key_y,
+            hash,
+            signature,
+            request_urls,
+            allowed_urls,
+            data_hashes,
+            plain_json_response_contents,
+        );
 
-        // for attestation_data_grumpkin.json
-        // obtain .data[0], this is an array of 6 decimal numbers, which we'll read out as string
-        let key0: BoundedVec<u8, 4> = BoundedVec::from_array("data".as_bytes());
+        // TODO insert checks on plain_json_response_contents
 
-        let data0 = json.get_array(key0).unwrap().get_object_from_array(0).unwrap();
-        let key1: BoundedVec<u8, 7> = BoundedVec::from_array("baseCcy".as_bytes());
-        let val: BoundedVec<u8, 20> = data0.get_string(key1).unwrap();
+        BusinessProgram::at(context.this_address())
+            .check_urls_emit_event(
+                context.msg_sender().unwrap(),
+                context.this_address(),
+                id,
+                allowed_url_matches_hashes,
+            )
+            .enqueue(&mut context);
 
-        val
+        true
     }
-
 }
