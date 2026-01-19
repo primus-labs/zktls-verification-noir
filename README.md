@@ -17,12 +17,9 @@ This repo uses Aztec Sandbox version `3.0.0-devnet.6-patch.1`. Follow the docume
 
 ## Run example
 
-1. Start an Aztec sandbox 
-```
-PXE_PROVER_ENABLED=1 aztec start --local-network
-```
+Follow these steps to run a local and a devnet example. 
 
-2. Compile real_business_program and small_comm_business_program
+1. Compile real_business_program and small_comm_business_program
 ```
 # inside real_business_program
 aztec compile
@@ -33,9 +30,9 @@ aztec compile
 aztec codegen -o src/artifacts target
 ```
 
-3. Move `---.ts` in `src/artifacts/` and `---.json` in `target` from both `real_business_program` and `small_comm_business_program` to `js_test/bindings/`. (Update the import path in `---.ts` for the jsons)
+2. Move `---.ts` in `src/artifacts/` and `---.json` in `target` from both `real_business_program` and `small_comm_business_program` to `js_test/bindings/`. (Update the import path in `---.ts` for the jsons)
 
-4. Build libraries
+3. Build libraries
 ```
 # Build parsing library
 cd att_verifier_parsing
@@ -46,25 +43,25 @@ cd ../aztec-attestation-sdk
 yarn && yarn build
 ```
 
-5. Run examples
+4. Run Devnet example
 ```
 cd ../example/js_test
 yarn
 
-# Run local benchmark
-yarn start:local
-
-# Run devnet benchmark
 yarn start:devnet
+```
+
+5. Run local example
+```
+PXE_PROVER_ENABLED=1 aztec start --local-network
+yarn start:local
 ```
 
 ## Benchmarks
 
 These are the benchmarks for 3 testcases; 2 for commitment based attestations with different numbers of commitments (1 versus 65) and one for hash based attestion.
 
-<!-- 
-TODO update these when the issue with the larger contract is fixed
-### Timings
+### Timings Local Network
 
 From MacBook Air with Apple M2 (8-core, 3.49 GHz) and 16 GB RAM:
 
@@ -72,8 +69,15 @@ From MacBook Air with Apple M2 (8-core, 3.49 GHz) and 16 GB RAM:
 |----------------------------------------|--------------|
 | Commitment-based verification          | 41113.49     |
 | Commitment-based verification (small)  | 36538.97     |
-| Hash-based verification                | 42784.63     | -->
+| Hash-based verification                | 42784.63     |
 
+### Timings Devnet
+
+| Method                                 | Time (ms)    |
+|----------------------------------------|--------------|
+| Commitment-based verification          | -            |
+| Commitment-based verification (small)  | 68782.87     |
+| Hash-based verification                | -            |
 
 ### Gatecounts
 
@@ -83,7 +87,13 @@ From MacBook Air with Apple M2 (8-core, 3.49 GHz) and 16 GB RAM:
 | Commitment-based verification (small)  | 321.513     |
 | Hash-based verification                | 794.646     |
 
-The flamegraphs for these 3 functions can be found in the `example` folder. 
+The flamegraphs for these 3 functions can be found in the `example` folder.
+
+### Note on zkVM Comparisons
+
+The benchmarks and tests in this repo measure the end-to-end performance of an Aztec transaction that verifies a Primus attestation. This means we are not only measuring the proving time of the circuit, but also include things like transaction submission and communication with a local network or devnet.
+
+Because of this, these results are not directly comparable to typical zkVM benchmarks. zkVM benchmarks usually focus on proving time in isolation and do not include blockchain-related aspects such as network interaction or state updates, so the numbers capture different kinds of costs.
 
 ## Tutorial: How to implement your use-case
 
