@@ -1,11 +1,14 @@
 import fs from "fs";
-import { parseHashingData } from "att-verifier-parsing";
-import { Client, ContractHelpers } from "../../aztec-attestation-sdk/src/index.js";
-import { BusinessProgramContract } from "./bindings/BusinessProgram.js";
+import { parseAttestationData, Client, ContractHelpers } from "aztec-attestation-sdk";
+import { BusinessProgramSmallCommContract } from "./bindings/BusinessProgramSmallComm.js";
+
+/**
+ * Example: Verify commitment-based attestation on LOCAL sandbox
+ */
 
 const MAX_RESPONSE_NUM = 2;
 const ALLOWED_URL = ["https://api.binance.com", "https://www.okx.com", "https://x.com"];
-const ATT_PATH = "testdata/eth_hash.json";
+const ATT_PATH = "testdata/attestation_data_grumpkin_small.json";
 const GRUMPKIN_BATCH_SIZE = 253;
 
 const H = {
@@ -14,11 +17,13 @@ const H = {
   is_infinite: false
 };
 
-console.log("Hash-based Attestation Verification Example");
+console.log("Commitment-based Attestation Verification - LOCAL");
 console.log("=".repeat(80));
 
+// Initialize client for LOCAL mode
 const client = new Client({
-  nodeUrl: "http://localhost:8080"
+  nodeUrl: "http://localhost:8080",
+  mode: "local"
 });
 await client.initialize();
 
@@ -26,15 +31,15 @@ const alice = await client.getAccount(0);
 
 console.log("\n1. Parsing attestation data...");
 const attestationData = JSON.parse(fs.readFileSync(ATT_PATH, "utf-8"));
-const parsed = parseHashingData(attestationData, {
+const parsed = parseAttestationData(attestationData, {
   maxResponseNum: MAX_RESPONSE_NUM,
   allowedUrls: ALLOWED_URL,
   grumpkinBatchSize: GRUMPKIN_BATCH_SIZE,
 });
 
 console.log("2. Deploying contract...");
-const contract = await ContractHelpers.deployContract<BusinessProgramContract>(
-  BusinessProgramContract,
+const contract = await ContractHelpers.deployContract<BusinessProgramSmallCommContract>(
+  BusinessProgramSmallCommContract,
   client,
   {
     admin: alice.address,
@@ -46,15 +51,18 @@ const contract = await ContractHelpers.deployContract<BusinessProgramContract>(
 console.log(`   Contract deployed at: ${contract.address.toString()}`);
 
 console.log("3. Verifying attestation...");
-const result = await contract.methods.verify_hash(
+const result = await contract.methods.verify_comm(
   parsed.publicKeyX,
   parsed.publicKeyY,
   parsed.hash,
   parsed.signature,
   parsed.requestUrls,
   parsed.allowedUrls,
-  parsed.dataHashes,
-  parsed.plainJsonResponses,
+  parsed.commitments,
+  parsed.randomScalars,
+  parsed.msgsChunks,
+  parsed.msgs,
+  H,
   parsed.id
 ).send({ from: alice.address }).wait();
 
@@ -65,7 +73,7 @@ console.log("Block:", result.blockNumber);
 if (result.status === "success") {
   const events = await ContractHelpers.getSuccessEvents(
     client.getNode(),
-    BusinessProgramContract.events.SuccessEvent,
+    BusinessProgramSmallCommContract.events.SuccessEvent,
     result.blockNumber!,
     2
   );
@@ -73,3 +81,4 @@ if (result.status === "success") {
 }
 
 await client.cleanup();
+process.exit(0);

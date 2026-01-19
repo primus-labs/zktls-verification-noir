@@ -1,12 +1,12 @@
 export { Client } from "./core/Client.js";
-export type { ClientConfig } from "./core/Client.js";
+export type { ClientConfig, NetworkMode } from "./core/Client.js";
 
-export { ContractHelpers } from "./template/ContractHelpers.js";
+export { ContractHelpers } from "./contract/ContractHelpers.js";
 export type {
-  TemplateDeploymentParams,
+  ContractDeploymentParams,
   EmbeddedCurvePoint,
   SuccessEvent
-} from "./template/ContractHelpers.js";
+} from "./contract/ContractHelpers.js";
 
 export {
   parseAttestationData,

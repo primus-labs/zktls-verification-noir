@@ -1,147 +1,206 @@
 # Aztec Attestation SDK
 
-SDK for working with Primus zkTLS attestations on Aztec.
+A TypeScript SDK for deploying and interacting with Primus Noir attestation verifier contracts on Aztec. Supports both local network and devnet deployment.
+
+## Features
+
+- Unified API for local and devnet deployment
+- Automatic fee payment handling for devnet
+- Account deployment and management
+- Contract helpers for devs who use the contract template
+- Event retrieval utilities
 
 ## Installation
 
 ```bash
-yarn add aztec-attestation-sdk att-verifier-parsing
+yarn add aztec-attestation-sdk
 ```
 
 ## Usage
 
-```typescript
-import { Client, ContractHelpers } from 'aztec-attestation-sdk';
-import { parseAttestationData } from 'att-verifier-parsing';
+### Devnet Mode
 
+```typescript
+import { Client, ContractHelpers } from "aztec-attestation-sdk";
+import { BusinessProgramContract } from "./bindings/BusinessProgram.js";
+
+// Initialize client for devnet mode
 const client = new Client({
-  nodeUrl: 'http://localhost:8080'
+  nodeUrl: "https://next.devnet.aztec-labs.com",
+  mode: "devnet"
+});
+await client.initialize();
+
+// Deploy account on devnet (takes ~2-5 minutes)
+const alice = await client.getAccount();
+
+// Deploy contract with timeout
+const contract = await ContractHelpers.deployContract<BusinessProgramContract>(
+  BusinessProgramContract,
+  client,
+  {
+    admin: alice.address,
+    allowedUrls: ["https://api.example.com"],
+    pointH: H, // for commitment-based
+    from: alice.address,
+    timeout: 1200000 // 20 minutes
+  }
+);
+
+// Call contract method with fee payment
+const paymentMethod = client.getPaymentMethod();
+const sendOptions: any = { from: alice.address };
+if (paymentMethod) {
+  sendOptions.fee = { paymentMethod };
+}
+
+const result = await contract.methods.verify_comm(
+  // ... params
+).send(sendOptions).wait({ timeout: 180000 });
+
+await client.cleanup();
+```
+
+### Local Network
+
+```typescript
+import { Client, ContractHelpers } from "aztec-attestation-sdk";
+import { BusinessProgramContract } from "./bindings/BusinessProgram.js";
+
+// Initialize client for local mode
+const client = new Client({
+  nodeUrl: "http://localhost:8080",
+  mode: "local"
 });
 await client.initialize();
 
 const alice = await client.getAccount(0);
 
-const contract = await ContractHelpers.deployContract(
-  MyContract,
+// Deploy contract
+const contract = await ContractHelpers.deployContract<BusinessProgramContract>(
+  BusinessProgramContract,
   client,
   {
     admin: alice.address,
     allowedUrls: ["https://api.example.com"],
-    pointH: { x: 123n, y: 456n, is_infinite: false },
+    pointH: H, // for commitment-based
     from: alice.address
   }
 );
 
-const parsed = parseAttestationData(attestationJson, config);
-
+// Call contract method
 const result = await contract.methods.verify_comm(
-  parsed.publicKeyX,
-  parsed.publicKeyY,
-  parsed.hash,
-  parsed.signature,
-  parsed.requestUrls,
-  parsed.allowedUrls,
-  parsed.commitments,
-  parsed.randomScalars,
-  parsed.msgsChunks,
-  parsed.msgs,
-  yourPointH,
-  parsed.id
+  // ... params
 ).send({ from: alice.address }).wait();
-
-if (result.status === "success" && result.blockNumber) {
-  const events = await ContractHelpers.getSuccessEvents(
-    client.getNode(),
-    MyContract.events.SuccessEvent,
-    result.blockNumber
-  );
-}
 
 await client.cleanup();
 ```
 
-## API
+## API Reference
 
-### `Client`
-
-Basic Aztec functionality bundled for this purpose.
+### Client
 
 #### Constructor
+
 ```typescript
 new Client(config: ClientConfig)
 ```
 
-**Config:**
-- `nodeUrl: string` - Aztec node URL
-- `pxeDataDirectory?: string` - PXE data directory (default: "pxe")
-- `proverEnabled?: boolean` - Enable prover (default: true)
-- `cleanupBeforeInit?: boolean` - Clean old PXE data (default: true)
+**Required:**
+- `nodeUrl: string` - Aztec node URL (`http://localhost:8080` for local, `https://next.devnet.aztec-labs.com` for devnet)
+- `mode: "local" | "devnet"` - Network mode
+
+**Optional (local only):**
+- `pxeDataDirectory?: string` - PXE data directory (default: `"pxe"`)
+- `proverEnabled?: boolean` - Enable proving (default: `true`)
+- `cleanupBeforeInit?: boolean` - Cleanup PXE before init (default: `true`)
 
 #### Methods
 
-**`initialize(): Promise<void>`**
-Setup PXE, wallet, and Barretenberg.
+- `initialize()`: Sets up wallet and Barretenberg
+- `getAccount(index?)`: Gets account (local: by index, devnet: deploys new)
+- `hashUrls(urls: string[])`: Hashes URLs with Poseidon2
+- `getPaymentMethod()`: Returns fee payment method (devnet only)
+- `isDevnet()`: Returns true if in devnet mode
+- `getNode()`: Returns Aztec node client
+- `getWallet()`: Returns test wallet
+- `getBarretenberg()`: Returns Barretenberg instance
+- `cleanup()`: Destroys Barretenberg instance
 
-**`getAccount(index?: number): Promise<AccountWallet>`**
-Get a test account by index (0-2).
+### ContractHelpers
 
-**`hashUrls(urls: string[]): Promise<bigint[]>`**
-Hash URLs with Poseidon2 for contract storage.
+#### deployContract
 
-**`getNode(): AztecNode`**
-Get the Aztec node client.
+```typescript
+static async deployContract<T>(
+  contractClass: any,
+  client: Client,
+  params: ContractDeploymentParams
+): Promise<T>
+```
 
-**`getWallet(): TestWallet`**
-Get the wallet instance.
+Deploys a contract with automatic fee handling.
 
-**`cleanup(): Promise<void>`**
-Clean up resources.
+**Parameters:**
+```typescript
+interface ContractDeploymentParams {
+  admin: AztecAddress;          // Admin address
+  allowedUrls: string[];        // Allowed URLs
+  pointH?: EmbeddedCurvePoint;  // Commitment point H (optional)
+  from: AztecAddress;           // Sender address
+  timeout?: number;             // Deployment timeout (optional)
+}
+```
 
-### `ContractHelpers`
+#### getSuccessEvents
 
-Helpers for contracts based on `contract_template`.
+```typescript
+static async getSuccessEvents(
+  node: AztecNode,
+  eventType: any,
+  blockNumber: number,
+  maxLookback?: number
+): Promise<SuccessEvent[]>
+```
 
-**`deployContract<T>(contractClass, client, params): Promise<T>`**
-Deploy a template-based contract.
+Retrieves SuccessEvent instances from a block.
 
-**`getSuccessEvents<TEvent>(node, eventType, blockNumber, maxLookback?): Promise<SuccessEvent[]>`**
-Get SuccessEvent instances from a block.
+## Key Differences: Local vs Devnet
+
+| Feature | Local | Devnet |
+|---------|-------|--------|
+| Account setup | Instant (predefined accounts) | ~2-5 minutes (deploy new) |
+| Fee payment | Not required | Required (sponsored FPC) |
+| Deployment timeout | Default (~2 min) | Recommended: 20 minutes |
+| TX timeout | Default (~2 min) | Recommended: 3 minutes |
+| PXE cleanup | Yes (configurable) | No |
 
 ## Examples
 
-See [example/js_test/](../example/js_test/) for complete examples:
-- [verify-commitment.ts](../example/js_test/verify-commitment.ts) - Commitment-based verification
-- [verify-small-commitment.ts](../example/js_test/verify-small-commitment.ts) - Small commitment verification
-- [verify-hash.ts](../example/js_test/verify-hash.ts) - Hash-based verification
-
-## Building from Source
-
-How to build & run the examples:
-
-```bash
-# 1. Build the att-verifier-parsing library
-cd att_verifier_parsing
-yarn && yarn build
-
-# 2. Build the SDK
-cd ../aztec-attestation-sdk
-yarn && yarn build
-
-# 3. Prep examples
-cd ../example/js_test
-yarn
-
-# 4. Make sure Aztec Sandbox is running
-PXE_PROVER_ENABLED=1 aztec start --sandbox
-
-# 5. Run the examples
-yarn tsx verify-commitment.ts
-yarn tsx verify-small-commitment.ts
-yarn tsx verify-hash.ts
-```
+See the `example/js_test` directory for complete examples:
+- `verify-commitment-local.ts`: Local sandbox example
+- `verify-commitment-devnet.ts`: Devnet example
 
 ## Requirements
 
-- Aztec Sandbox `3.0.0-devnet.5`
-- Node.js 18+
-- TypeScript 5.9+
+- Aztec version: `3.0.0-devnet.6-patch.1`
+- Node.js: `18+`
+- TypeScript: `5.9+`
+
+For local development:
+```bash
+PXE_PROVER_ENABLED=1 aztec start --local-network
+```
+
+For devnet deployment:
+- Access to `https://next.devnet.aztec-labs.com`
+
+## Re-exported from att-verifier-parsing
+
+The SDK also exports parsing utilities:
+
+```typescript
+import { parseAttestationData, parseHashingData, hashUrlsWithPoseidon2 } from "aztec-attestation-sdk";
+```
+
+See `att-verifier-parsing` documentation for details on these functions.

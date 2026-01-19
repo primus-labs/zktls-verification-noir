@@ -13,13 +13,14 @@ export interface EmbeddedCurvePoint {
 }
 
 /**
- * Deployment parameters for contract_template based contracts.
+ * Deployment parameters for attestation verifier contracts.
  */
-export interface TemplateDeploymentParams {
+export interface ContractDeploymentParams {
   admin: AztecAddress;
   allowedUrls: string[];
   pointH?: EmbeddedCurvePoint;
   from: AztecAddress;
+  timeout?: number;
 }
 
 /**
@@ -32,16 +33,17 @@ export interface SuccessEvent {
 }
 
 /**
- * Helpers for contracts based on contract_template.
+ * Helpers for attestation verifier contracts.
  */
 export class ContractHelpers {
   /**
-   * Deploys a contract_template based contract with hashed URLs.
+   * Deploys an attestation verifier contract with hashed URLs.
+   * Automatically handles fee payment for devnet mode.
    */
   static async deployContract<T>(
     contractClass: any,
     client: Client,
-    params: TemplateDeploymentParams
+    params: ContractDeploymentParams
   ): Promise<T> {
     const wallet = client.getWallet();
     const hashedUrls = await client.hashUrls(params.allowedUrls);
@@ -50,10 +52,26 @@ export class ContractHelpers {
       ? [params.admin, hashedUrls, params.pointH]
       : [params.admin, hashedUrls];
 
-    return await contractClass
+    const sendOptions: any = { from: params.from };
+
+    // Add fee payment for devnet
+    if (client.isDevnet()) {
+      const paymentMethod = client.getPaymentMethod();
+      if (paymentMethod) {
+        sendOptions.fee = { paymentMethod };
+      }
+    }
+
+    const deployment = contractClass
       .deploy(wallet, ...deploymentArgs)
-      .send({ from: params.from })
-      .deployed();
+      .send(sendOptions);
+
+    // Add timeout if specified
+    if (params.timeout) {
+      return await deployment.deployed({ timeout: params.timeout });
+    }
+
+    return await deployment.deployed();
   }
 
   /**

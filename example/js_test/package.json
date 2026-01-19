@@ -13,12 +13,15 @@
     "@aztec/test-wallet": "3.0.0-devnet.6-patch.1",
     "@types/node": "^24.7.0",
     "att-verifier-parsing": "file:../../att_verifier_parsing",
+    "aztec-attestation-sdk": "file:../../aztec-attestation-sdk",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   },
   "type": "module",
   "scripts": {
     "start": "tsx benchmark.ts",
+    "start:local": "tsx verify-commitment-local.ts",
+    "start:devnet": "tsx verify-commitment-devnet.ts",
     "start:deploy": "tsx deploy.ts",
     "start:verify": "tsx verify_att.ts"
   },
