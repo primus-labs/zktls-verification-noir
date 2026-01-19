@@ -1,16 +1,23 @@
 import fs from "fs";
 import { parseAttestationData, parseHashingData, hashUrlsWithPoseidon2 } from "att-verifier-parsing";
-import { getInitialTestAccountsData } from "@aztec/accounts/testing";
 import { TestWallet } from "@aztec/test-wallet/server";
-import { getPXEConfig } from "@aztec/pxe/server";
 import { BusinessProgramContract, SuccessEvent } from "./bindings/BusinessProgram.js";
 import { BusinessProgramSmallCommContract, SuccessEvent as SuccessEventSmallComm } from "./bindings/BusinessProgramSmallComm.js";
 import { performance } from "perf_hooks";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
-import { rm } from "node:fs/promises";
 import { Barretenberg } from "@aztec/bb.js";
 import { getDecodedPublicEvents } from '@aztec/aztec.js/events';
-import { Fr } from "@aztec/aztec.js/fields";
+import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee/testing";
+import { SponsoredFPCContract } from "@aztec/noir-contracts.js/SponsoredFPC";
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
+import { getContractInstanceFromInstantiationParams } from '@aztec/stdlib/contract';
+import { Fr, GrumpkinScalar } from "@aztec/aztec.js/fields";
+
+// SETUP
+
+const DEVNET_NODE_URL = "https://next.devnet.aztec-labs.com";
+const DEPLOY_TIMEOUT = 1200000; // 20 minutes
+const TX_TIMEOUT = 180000;      // 3 minutes
 
 const MAX_RESPONSE_NUM = 2;
 const ALLOWED_URL = ["https://api.binance.com", "https://www.okx.com", "https://x.com"];
@@ -19,19 +26,76 @@ const ATT_PATH_COMM_SMALL = "testdata/attestation_data_grumpkin_small.json";
 const ATT_PATH_HASH = "testdata/eth_hash.json";
 const GRUMPKIN_BATCH_SIZE = 253;
 
+async function getSponsoredFPCInstance() {
+  const SPONSORED_FPC_SALT = new Fr(0n);
+  return await getContractInstanceFromInstantiationParams(SponsoredFPCContract.artifact, {
+    salt: SPONSORED_FPC_SALT,
+  });
+}
+
+async function setupWallet() {
+  const node = createAztecNodeClient(DEVNET_NODE_URL);
+  const wallet = await TestWallet.create(node, { proverEnabled: true });
+  return wallet;
+}
+
+async function deploySchnorrAccount(wallet: TestWallet) {
+  console.log('👤 Deploying Schnorr account...');
+
+  // Generate account keys
+  let secretKey = Fr.random();
+  let signingKey = GrumpkinScalar.random();
+  let salt = Fr.random();
+
+  console.log(`🔑 Secret key: ${secretKey.toString()}`);
+  console.log(`🖊️  Signing key: ${signingKey.toString()}`);
+  console.log(`🧂 Salt: ${salt.toString()}`);
+  console.log('⚠️  Save these keys if you want to reuse this account!');
+
+  const account = await wallet.createSchnorrAccount(secretKey, salt, signingKey);
+  console.log(`Account address: ${account.address}`);
+
+  const deployMethod = await account.getDeployMethod();
+
+  // Setup sponsored FPC for account deployment
+  const sponsoredFPC = await getSponsoredFPCInstance();
+  await wallet.registerContract(sponsoredFPC, SponsoredFPCContract.artifact);
+  const sponsoredPaymentMethod = new SponsoredFeePaymentMethod(sponsoredFPC.address);
+
+  console.log('⏳ Deploying account on-chain (this takes ~2-5 minutes)...');
+  let tx = await deployMethod.send({
+    from: AztecAddress.ZERO,
+    fee: { paymentMethod: sponsoredPaymentMethod }
+  }).wait({ timeout: 120000 });
+
+  console.log(`✅ Account deployed! TX: ${tx.txHash}`);
+  return account;
+}
+
+// MAIN BENCHMARK
+
 console.log("=".repeat(80));
-console.log("ATTESTATION VERIFICATION BENCHMARK");
+console.log("ATTESTATION VERIFICATION BENCHMARK - DEVNET");
 console.log("=".repeat(80));
 
-const node = createAztecNodeClient("http://localhost:8080");
+// Connect to devnet node
+console.log(`Connecting to Aztec node at: ${DEVNET_NODE_URL}`);
+const node = createAztecNodeClient(DEVNET_NODE_URL);
 
-const config = getPXEConfig();
-await rm("pxe", { recursive: true, force: true });
-config.dataDirectory = "pxe";
-config.proverEnabled = true;
-const wallet = await TestWallet.create(node, config);
-const [aliceAccount] = await getInitialTestAccountsData();
-let alice = await wallet.createSchnorrAccount(aliceAccount.secret, aliceAccount.salt);
+// Setup wallet for devnet
+console.log("Setting up wallet...");
+const wallet = await setupWallet();
+console.log("✅ Wallet setup complete");
+
+// Deploy account on devnet
+const alice = await deploySchnorrAccount(wallet);
+
+// Setup sponsored FPC for fee payment
+console.log("💰 Setting up sponsored fee payment...");
+const sponsoredFPC = await getSponsoredFPCInstance();
+await wallet.registerContract(sponsoredFPC, SponsoredFPCContract.artifact);
+const sponsoredPaymentMethod = new SponsoredFeePaymentMethod(sponsoredFPC.address);
+console.log(`✅ Sponsored FPC configured at: ${sponsoredFPC.address}`);
 
 const bb = await Barretenberg.new();
 
@@ -56,26 +120,33 @@ console.log("[2/4] Hashing allowed URLs...");
 const hashedUrlsComm = await hashUrlsWithPoseidon2(bb, parsedComm.allowedUrls);
 
 // Point H for Pedersen commitment
-let H = { 
-  x: 19978178333943292355349418156359056918133515370613875064303296301489725624535n, 
-  y: 13201885744872984780649110422697192888453633882501354541258277493771319153464n, 
-  is_infinite: false 
+let H = {
+  x: 19978178333943292355349418156359056918133515370613875064303296301489725624535n,
+  y: 13201885744872984780649110422697192888453633882501354541258277493771319153464n,
+  is_infinite: false
 };
 
-// console.log("[3/4] Deploying business program contract...");
+// console.log("[3/4] Deploying business program contract to devnet...");
+// console.log("(This may take up to 20 minutes on devnet...)");
+// const startDeploy1 = performance.now();
 // const businessProgramComm = await BusinessProgramContract.deploy(
-//   wallet, 
-//   alice.address, 
-//   hashedUrlsComm, 
+//   wallet,
+//   alice.address,
+//   hashedUrlsComm,
 //   H
 // )
-//   .send({ from: aliceAccount.address })
-//   .deployed();
+//   .send({
+//     from: alice.address,
+//     fee: { paymentMethod: sponsoredPaymentMethod }
+//   })
+//   .deployed({ timeout: DEPLOY_TIMEOUT });
+// const endDeploy1 = performance.now();
 // console.log("Contract deployed at:", businessProgramComm.address.toString());
 
 // console.log("[4/4] Verifying attestation with commitments...");
 // const startComm = performance.now();
 
+// Commented out - uncomment when ready to verify
 // let resultComm = await businessProgramComm.methods.verify_comm(
 //   parsedComm.publicKeyX,
 //   parsedComm.publicKeyY,
@@ -89,7 +160,10 @@ let H = {
 //   parsedComm.msgs,
 //   H,
 //   parsedComm.id
-// ).send({ from: aliceAccount.address }).wait();
+// ).send({
+//   from: alice.address,
+//   fee: { paymentMethod: sponsoredPaymentMethod }
+// }).wait({ timeout: TX_TIMEOUT });
 
 // const endComm = performance.now();
 // const durationComm = (endComm - startComm).toFixed(2);
@@ -123,7 +197,7 @@ console.log("=".repeat(80));
 // Load small commitment attestation data
 const attestationDataCommSmall = JSON.parse(fs.readFileSync(ATT_PATH_COMM_SMALL, "utf-8"));
 
-console.log("\n[1/2] Parsing attestation data (small)...");
+console.log("\n[1/4] Parsing attestation data (small)...");
 const parsedCommSmall = parseAttestationData(attestationDataCommSmall, {
   maxResponseNum: MAX_RESPONSE_NUM,
   allowedUrls: ALLOWED_URL,
@@ -133,16 +207,24 @@ const parsedCommSmall = parseAttestationData(attestationDataCommSmall, {
 console.log("[2/4] Hashing allowed URLs...");
 const hashedUrlsCommSmall = await hashUrlsWithPoseidon2(bb, parsedCommSmall.allowedUrls);
 
-console.log("[3/4] Deploying business program contract (small)...");
+console.log("[3/4] Deploying business program contract (small) to devnet...");
+console.log("(This may take up to 20 minutes on devnet...)");
+const startDeploy2 = performance.now();
+
 const businessProgramSmallComm = await BusinessProgramSmallCommContract.deploy(
-  wallet, 
-  alice.address, 
-  hashedUrlsCommSmall, 
+  wallet,
+  alice.address,
+  hashedUrlsCommSmall,
   H
 )
-  .send({ from: aliceAccount.address })
-  .deployed();
-console.log("Contract deployed at:", businessProgramSmallComm.address.toString());
+  .send({
+    from: alice.address,
+    fee: { paymentMethod: sponsoredPaymentMethod }
+  })
+  .deployed({ timeout: DEPLOY_TIMEOUT });
+
+const endDeploy2 = performance.now();
+console.log(`Contract deployed at: ${businessProgramSmallComm.address.toString()}`);
 
 console.log("[4/4] Verifying attestation with commitments (small)...");
 const startCommSmall = performance.now();
@@ -160,7 +242,10 @@ let resultCommSmall = await businessProgramSmallComm.methods.verify_comm(
   parsedCommSmall.msgs,
   H,
   parsedCommSmall.id
-).send({ from: aliceAccount.address }).wait();
+).send({
+  from: alice.address,
+  fee: { paymentMethod: sponsoredPaymentMethod }
+}).wait({ timeout: TX_TIMEOUT });
 
 const endCommSmall = performance.now();
 const durationCommSmall = (endCommSmall - startCommSmall).toFixed(2);
@@ -217,7 +302,10 @@ const startHash = performance.now();
 //   parsedHash.dataHashes,
 //   parsedHash.plainJsonResponses,
 //   parsedHash.id
-// ).send({ from: aliceAccount.address }).wait();
+// ).send({
+//   from: alice.address,
+//   fee: { paymentMethod: sponsoredPaymentMethod }
+// }).wait({ timeout: TX_TIMEOUT });
 
 // const endHash = performance.now();
 // const durationHash = (endHash - startHash).toFixed(2);
@@ -254,3 +342,4 @@ console.log("=".repeat(80));
 
 // Cleanup
 await bb.destroy();
+process.exit(0);
