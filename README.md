@@ -18,19 +18,17 @@ This repo uses Aztec Sandbox version `3.0.0-devnet.5`. Follow the documentation 
 
 1. Start an Aztec sandbox 
 ```
-PXE_PROVER_ENABLED=1 aztec start --sandbox
+PXE_PROVER_ENABLED=1 aztec start --local-network
 ```
 
 2. Compile real_business_program and small_comm_business_program
 ```
 # inside real_business_program
-aztec-nargo compile
-aztec-postprocess-contract
+aztec compile
 aztec codegen -o src/artifacts target
 
 # inside small_comm_business_program
-aztec-nargo compile
-aztec-postprocess-contract
+aztec compile
 aztec codegen -o src/artifacts target
 ```
 
@@ -141,10 +139,9 @@ Note that the template contains support for both types of attestations (commitme
 
 When the contract is complete, compile it and obtain the necessary artifacts for the script to use in step 2:
 ```
-PXE_PROVER_ENABLED=1 aztec start --sandbox
+PXE_PROVER_ENABLED=1 aztec start --local-network
 # In your contract folder
 aztec-nargo compile
-aztec-postprocess-contract
 aztec codegen -o src/artifacts target
 ```
 

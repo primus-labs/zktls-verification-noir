@@ -3,10 +3,7 @@ use dep::aztec::macros::aztec;
 pub contract BusinessProgramSmallComm {
     use dep::json_parser::JSON512b;
     use att_verifier_lib::verify_attestation_comm;
-    use aztec::{
-        event::event_emission::emit_event_in_public,
-        macros::{events::event, functions::{external, initializer}},
-    };
+    use aztec::macros::{events::event, functions::{external, initializer}};
     use aztec::macros::storage::storage;
     use aztec::protocol_types::address::AztecAddress;
     use aztec::state_vars::{public_immutable::PublicImmutable, public_mutable::PublicMutable};
@@ -32,24 +29,24 @@ pub contract BusinessProgramSmallComm {
 
     #[external("public")]
     fn set_admin(new_admin: AztecAddress) {
-        assert(storage.admin.read().eq(context.msg_sender().unwrap()), "caller is not admin");
-        storage.admin.write(new_admin);
+        assert(self.storage.admin.read().eq(self.msg_sender().unwrap()), "caller is not admin");
+        self.storage.admin.write(new_admin);
     }
 
     #[initializer]
     #[external("public")]
     fn constructor(admin: AztecAddress, allowed_url_hashes: [Field; 3], H: EmbeddedCurvePoint) {
         assert(!admin.is_zero(), "invalid admin");
-        storage.admin.write(admin);
-        storage.allowed_url_hashes.write(allowed_url_hashes);
-        storage.H.initialize(H);
+        self.storage.admin.write(admin);
+        self.storage.allowed_url_hashes.write(allowed_url_hashes);
+        self.storage.H.initialize(H);
     }
 
     // TODO - allow update single url with index?
     #[external("public")]
     fn update_allowed_url_hashes(allowed_url_hashes: [Field; 3]) {
-        assert(storage.admin.read().eq(context.msg_sender().unwrap()), "caller is not admin");
-        storage.allowed_url_hashes.write(allowed_url_hashes);
+        assert(self.storage.admin.read().eq(self.msg_sender().unwrap()), "caller is not admin");
+        self.storage.allowed_url_hashes.write(allowed_url_hashes);
     }
 
     #[external("public")]
@@ -61,7 +58,7 @@ pub contract BusinessProgramSmallComm {
         H: EmbeddedCurvePoint,
     ) {
         // Check allowed_url_matches_hashes are in storage
-        let allowed_url_hashes: [Field; 3] = storage.allowed_url_hashes.read();
+        let allowed_url_hashes: [Field; 3] = self.storage.allowed_url_hashes.read();
         for i in 0..2 {
             let check_hash = allowed_url_matches_hashes[i];
             let mut found = false;
@@ -74,10 +71,10 @@ pub contract BusinessProgramSmallComm {
         }
 
         // Check H equals the publicly known value
-        let stored_H: EmbeddedCurvePoint = storage.H.read();
+        let stored_H: EmbeddedCurvePoint = self.storage.H.read();
         assert(H == stored_H);
 
-        emit_event_in_public(SuccessEvent { sender, contract_address, id }, &mut context);
+        self.emit(SuccessEvent { sender, contract_address, id });
     }
 
     // Check H equals the publicly known value
@@ -114,15 +111,15 @@ pub contract BusinessProgramSmallComm {
         // TODO what assert to do here?
         let val = get_value(msgs);
 
-        BusinessProgramSmallComm::at(context.this_address())
+        BusinessProgramSmallComm::at(self.address)
             .check_values_emit_event(
-                context.msg_sender().unwrap(),
-                context.this_address(),
+                self.msg_sender().unwrap(),
+                self.address,
                 id,
                 allowed_url_matches_hashes,
                 H,
             )
-            .enqueue(&mut context);
+            .enqueue(self.context);
 
         true
     }
@@ -137,7 +134,7 @@ pub contract BusinessProgramSmallComm {
 
         let data0 = json.get_array(key0).unwrap().get_object_from_array(0).unwrap();
         let key1: BoundedVec<u8, 7> = BoundedVec::from_array("baseCcy".as_bytes());
-        let val: BoundedVec<u8, 20> = data0.get_string(key1).unwrap();
+        let val: BoundedVec<u8, 20> = data0.get_string_from_path([key1]).unwrap();
 
         val
     }

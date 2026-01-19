@@ -1,8 +1,8 @@
 import { keccak_256 } from "@noble/hashes/sha3";
 import { secp256k1 } from "@noble/curves/secp256k1";
-import type { Barretenberg, Fr } from "@aztec/bb.js";
+import type { Barretenberg } from "@aztec/bb.js";
 import type { AttestationData, AttestationRequest } from "./types.js";
-
+import { Fr } from "@aztec/aztec.js/fields";
 /**
  * Encoding utilities
  */
@@ -132,8 +132,7 @@ export function padUrl(url: number[], targetLength: number = 1024): number[] {
 
 export async function hashUrlsWithPoseidon2(
   bb: Barretenberg,
-  allowedUrls: number[][],
-  Fr: typeof import("@aztec/bb.js").Fr
+  allowedUrls: number[][]
 ): Promise<bigint[]> {
   const hashedUrls: bigint[] = [];
 
@@ -141,7 +140,7 @@ export async function hashUrlsWithPoseidon2(
     const paddedUrl = padUrl(url, 1024);
     const frArray = paddedUrl.map((b) => new Fr(BigInt(b)).toBuffer());
     const hashFr = await bb.poseidon2Hash({ inputs: frArray });
-    const hashBigInt = BigInt(Fr.fromBuffer(hashFr.hash).toString());
+    const hashBigInt = BigInt(Fr.fromBuffer(Buffer.from(hashFr.hash)).toString());
     hashedUrls.push(hashBigInt);
   }
 

@@ -5,7 +5,7 @@ import { TestWallet } from "@aztec/test-wallet/server";
 import { getPXEConfig } from "@aztec/pxe/server";
 import { AccountManager } from "@aztec/aztec.js/wallet";
 import { rm } from "node:fs/promises";
-import { Barretenberg, Fr } from "@aztec/bb.js";
+import { Barretenberg } from "@aztec/bb.js";
 import { hashUrlsWithPoseidon2, parseAllowedUrls } from "att-verifier-parsing";
 
 export interface ClientConfig {
@@ -93,7 +93,7 @@ export class Client {
   async hashUrls(urls: string[]): Promise<bigint[]> {
     this.ensureInitialized();
     const urlsAsBytes = parseAllowedUrls(urls);
-    return await hashUrlsWithPoseidon2(this.bb!, urlsAsBytes, Fr);
+    return await hashUrlsWithPoseidon2(this.bb!, urlsAsBytes);
   }
 
   getNode(): AztecNode {
