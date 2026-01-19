@@ -3,8 +3,9 @@
 This repo contains the necessary libraries to create an **Aztec Smart contract that verifies a Primus zkTLS attestation**. There are 2 supported types: commitment based attestation (Grumpkin curve) and hashing based attestation.
 
 In this repo you will find the following components:
-- `att_verifier_lib` - The Noir library containing the general attestation verification logic. This will be used in the smart contract. 
+- `att_verifier_lib` - The Noir library containing the general attestation verification logic. This will be used in the smart contract.
 - `att_verifier_parsing` - The TS library containing the needed parsing logic, which converts a json input into the correct values to call the Aztec smart contract.
+- `aztec-attestation-sdk` - The Aztec Attestaion SDK helps you get started easily on deploying and calling your attestation contracts.
 - `contract_template` - The Aztec smart contract template that can be used to complete a business case. Developers can use this as a starting point for their application.
 - `example` - This contains 2 example smart contracts and a script to run end-to-end tests for these examples. It also benchmarks the examples. 
 
@@ -12,7 +13,7 @@ In this README there is a [Tutorial](#tutorial-how-to-implement-your-use-case) o
 
 ## Installation and versioning
 
-This repo uses Aztec Sandbox version `3.0.0-devnet.5`. Follow the documentation [here](https://docs.aztec.network/developers/getting_started_on_sandbox#install-the-sandbox) to install the sandbox.
+This repo uses Aztec Sandbox version `3.0.0-devnet.6-patch.1`. Follow the documentation [here](https://docs.aztec.network/developers/getting_started_on_local_network) to install the sandbox.
 
 ## Run example
 
@@ -34,25 +35,35 @@ aztec codegen -o src/artifacts target
 
 3. Move `---.ts` in `src/artifacts/` and `---.json` in `target` from both `real_business_program` and `small_comm_business_program` to `js_test/bindings/`. (Update the import path in `---.ts` for the jsons)
 
-4. Build parsing library
+4. Build libraries
 ```
-cd att_verifier_lib
-yarn build
+# Build parsing library
+cd att_verifier_parsing
+yarn && yarn build
+
+# Build SDK
+cd ../aztec-attestation-sdk
+yarn && yarn build
 ```
 
-5. Run script
+5. Run examples
 ```
 cd ../example/js_test
 yarn
 
-# e2e test
-yarn start
+# Run local benchmark
+yarn start:local
+
+# Run devnet benchmark
+yarn start:devnet
 ```
 
 ## Benchmarks
 
 These are the benchmarks for 3 testcases; 2 for commitment based attestations with different numbers of commitments (1 versus 65) and one for hash based attestion.
 
+<!-- 
+TODO update these when the issue with the larger contract is fixed
 ### Timings
 
 From MacBook Air with Apple M2 (8-core, 3.49 GHz) and 16 GB RAM:
@@ -61,7 +72,7 @@ From MacBook Air with Apple M2 (8-core, 3.49 GHz) and 16 GB RAM:
 |----------------------------------------|--------------|
 | Commitment-based verification          | 41113.49     |
 | Commitment-based verification (small)  | 36538.97     |
-| Hash-based verification                | 42784.63     |
+| Hash-based verification                | 42784.63     | -->
 
 
 ### Gatecounts
@@ -78,9 +89,9 @@ The flamegraphs for these 3 functions can be found in the `example` folder.
 
 If you are a developer that wants to integrate an Aztec Attestation verifier in your project, you need to do the following:
 1. Complete the Aztec smart contract using the `contract_template`
-2. Deploy and call the Aztec smart contract, with the inputs parsed from the attestation json. Use the `att_verifier_parsing` library for this. 
+2. Use the SDK (`aztec-attestation-sdk`) to deploy and call the Aztec smart contract. Do this with the inputs parsed from the attestation json.
 
-Check the `example` folder for 2 example contracts and an example script. 
+Check the `example` folder for example contracts and scripts. 
 
 ### Step 1. Complete Aztec smart contract
 
@@ -119,15 +130,15 @@ fn verify_comm(
 
     // TODO insert checks on msgs
 
-    BusinessProgram::at(context.this_address())
+    BusinessProgram::at(self.address)
         .check_values_emit_event(
-            context.msg_sender().unwrap(),
-            context.this_address(),
+            self.msg_sender().unwrap(),
+            self.address,
             id,
             allowed_url_matches_hashes,
             H,
         )
-        .enqueue(&mut context);
+        .enqueue(self.context);
 
     true
 }
@@ -149,92 +160,104 @@ aztec codegen -o src/artifacts target
 
 Move `---.ts` in `src/artifacts/` and `---.json` in `target` from your smart contract into a folder that your script will be able to use. For example in `example/js_test` these files are expected to be placed in `example/js_test/bindings`. 
 
-The following code snippets are from the full example in `example/js_test/index.ts`. This works for Aztec version `3.0.0-devnet.5`. 
+The following code snippets show how to use the SDK on devnet. See the full examples in `example/js_test/verify-commitment-devnet.ts` and `verify-commitment-local.ts`. This works for Aztec version `3.0.0-devnet.6-patch.1`.
 
-Create a node and test wallet. 
+// START
+Initialize the client and deploy account (~2-5 minutes):
 ```typescript
-const node = createAztecNodeClient("http://localhost:8080");
+import { Client, ContractHelpers, parseAttestationData } from "aztec-attestation-sdk";
+import { BusinessProgramContract } from "./bindings/BusinessProgram.js";
 
-const config = getPXEConfig();
-await rm("pxe", { recursive: true, force: true });
-config.dataDirectory = "pxe";
-config.proverEnabled = true;
-const wallet = await TestWallet.create(node, config);
-const [aliceAccount] = await getInitialTestAccountsData();
-let alice = await wallet.createSchnorrAccount(aliceAccount.secret, aliceAccount.salt);
+const client = new Client({
+  nodeUrl: "https://next.devnet.aztec-labs.com",
+  mode: "devnet"
+});
+await client.initialize();
+const alice = await client.getAccount();
 ```
 
-Parse local attestation json file. Set `ATT_PATH_COMM` filepath, array of allowed urls `ALLOWED_URLS`, and values `MAX_RESPONSE_NUM` and `GRUMPKIN_BATCH_SIZE` according to usecase. 
+Parse attestation data:
 ```typescript
-const attestationDataComm = JSON.parse(fs.readFileSync(ATT_PATH_COMM, "utf-8"));
-
-const parsedComm = parseAttestationData(attestationDataComm, {
+const attestationData = JSON.parse(fs.readFileSync(ATT_PATH, "utf-8"));
+const parsed = parseAttestationData(attestationData, {
   maxResponseNum: MAX_RESPONSE_NUM,
-  allowedUrls: ALLOWED_URL,
+  allowedUrls: ALLOWED_URLS,
   grumpkinBatchSize: GRUMPKIN_BATCH_SIZE,
 });
-```
 
-In the contract storage we store the hashes of the allowed urls, because storing the full urls is too large. 
-```typescript
-const hashedUrlsComm = await hashUrlsWithPoseidon2(bb, parsedComm.allowedUrls, Fr);
-```
-
-If you are using the commitment based approach, the use case will have its unique `H` which must be set in the smart contract as well. 
-```typescript
-let H = { 
-  x: 19978178333943292355349418156359056918133515370613875064303296301489725624535n, 
-  y: 13201885744872984780649110422697192888453633882501354541258277493771319153464n, 
-  is_infinite: false 
+// For commitment-based attestation, set your use case's unique H point
+const H = {
+  x: 19978178333943292355349418156359056918133515370613875064303296301489725624535n,
+  y: 13201885744872984780649110422697192888453633882501354541258277493771319153464n,
+  is_infinite: false
 };
 ```
 
-Deploy the contract.
+Deploy contract (automatically hashes URLs and handles fees):
 ```typescript
-const businessProgramComm = await BusinessProgramContract.deploy(
-  wallet, 
-  alice.address, 
-  hashedUrlsComm, 
-  H
-)
-  .send({ from: aliceAccount.address })
-  .deployed();
+const contract = await ContractHelpers.deployContract<BusinessProgramContract>(
+  BusinessProgramContract,
+  client,
+  {
+    admin: alice.address,
+    allowedUrls: ALLOWED_URLS,
+    pointH: H,
+    from: alice.address,
+    timeout: 1200000
+  }
+);
 ```
 
-Call the verification function for commitment-based attestation:
+Verify attestation:
 ```typescript
-let resultComm = await businessProgramComm.methods.verify_comm(
-  parsedComm.publicKeyX,
-  parsedComm.publicKeyY,
-  parsedComm.hash,
-  parsedComm.signature,
-  parsedComm.requestUrls,
-  parsedComm.allowedUrls,
-  parsedComm.commitments,
-  parsedComm.randomScalars,
-  parsedComm.msgsChunks,
-  parsedComm.msgs,
+const paymentMethod = client.getPaymentMethod();
+const result = await contract.methods.verify_comm(
+  parsed.publicKeyX,
+  parsed.publicKeyY,
+  parsed.hash,
+  parsed.signature,
+  parsed.requestUrls,
+  parsed.allowedUrls,
+  parsed.commitments,
+  parsed.randomScalars,
+  parsed.msgsChunks,
+  parsed.msgs,
   H,
-  parsedComm.id
-).send({ from: aliceAccount.address }).wait();
+  parsed.id
+).send({ from: alice.address, fee: { paymentMethod } }).wait({ timeout: 180000 });
 ```
 
-If the verification is successful, a public event is emitted. Add a check to pick up this event:
+Check for success event:
 ```typescript
-if (resultComm.status === "success") {
-  const success_event_comm = await getDecodedPublicEvents<SuccessEvent>(
-    node,
+if (result.status === "success") {
+  const events = await ContractHelpers.getSuccessEvents(
+    client.getNode(),
     BusinessProgramContract.events.SuccessEvent,
-    resultComm.blockNumber!,
-    2
+    result.blockNumber!
   );
-  console.log("Success event:", success_event_comm.length > 0 ? "OK - Event emitted" : "Not found");
-} else {
-  console.log("Verification failed");
+  console.log("Event emitted:", events.length > 0);
 }
+await client.cleanup();
 ```
 
-That's it! You have successfully created the Aztec Attestation verifier. 
+That's it! You have successfully created the Aztec Attestation verifier on devnet.
+
+> Note: If you prefer to implement your own Aztec functionality but still want to use the parsing library for the Primus attestation JSON, use `att_verifier_parsing`. 
+
+### Local Development
+
+For local sandbox testing, use `mode: "local"` and remove fee payment:
+```typescript
+const client = new Client({ nodeUrl: "http://localhost:8080", mode: "local" });
+await client.initialize();
+const alice = await client.getAccount(0); // instant
+
+// Deploy and verify without fees
+const contract = await ContractHelpers.deployContract(/* same params */);
+const result = await contract.methods.verify_comm(/* params */)
+  .send({ from: alice.address })
+  .wait();
+```
 
 ## Implementation details
 
