@@ -1,167 +1,297 @@
-# Primus Attestation Logic Verifier Contracts
+# Primus Attestations - Aztec Verifier
 
-## Workflow
+This repo contains the necessary libraries to create an **Aztec Smart contract that verifies a Primus zkTLS attestation**. There are 2 supported types: commitment based attestation (Grumpkin curve) and hashing based attestation.
 
-Based on:
-https://hackmd.io/zIFf5ChpRfGcT60e2KCRAQ?stext=1549%3A62%3A0%3A1759918279%3AuB_AXk&view=
+In this repo you will find the following components:
+- `att_verifier_lib` - The Noir library containing the general attestation verification logic. This will be used in the smart contract.
+- `att_verifier_parsing` - The TS library containing the needed parsing logic, which converts a json input into the correct values to call the Aztec smart contract.
+- `aztec-attestation-sdk` - The Aztec Attestaion SDK helps you get started easily on deploying and calling your attestation contracts.
+- `contract_template` - The Aztec smart contract template that can be used to complete a business case. Developers can use this as a starting point for their application.
+- `example` - This contains 2 example smart contracts and a script to run end-to-end tests for these examples. It also benchmarks the examples. 
 
-1. Dapp request data attestation from Primus App
-2. Primus runs zktls to generate attestation
-3. Primus Apps return attestation
-4. Dapp obtains the TLS AES session key from Primus
-5. Dapp parses attestation data with primus zkTLS SDK and send a transaction to AttVerifier contract
-
---------------------on Aztec chain--------------------
-
-6. AttVerifier contract verifies signature, check allowed urls, and decrypts the ciphertext
-7. AttVerifier calls BusinessProgram which includes the customized conditions and is deployed by the developers
-8. BusinessProgram checks the condition and returns to AttVerifier
-9. AttVerifier sends a public "success" event and returns the result
-
-
-## Components
-
-### att_verifier
-Main attestation verifier contract. Includes the logic for signature verification, url check and AES decryption.
-
-### basic_business_program
-An interface contract for business program. Provide the ABI for custom business program.
-
-### real_business_program
-A testing business program. This is the contract that will be deployed by the developers.
-
-### js_test
-JS scripts to deploy and interact with the contracts 
+In this README there is a [Tutorial](#tutorial-how-to-implement-your-use-case) on how to use the libraries to implement your own use case. 
 
 ## Installation and versioning
 
-This flow works with the Aztec Sandbox version `3.0.0-nightly20251017`. Follow the documentation [here](https://docs.aztec.network/nightly/developers/getting_started_on_sandbox) to install the sandbox.
+This repo uses Aztec Sandbox version `3.0.0-devnet.6-patch.1`. Follow the documentation [here](https://docs.aztec.network/developers/getting_started_on_local_network) to install the sandbox.
 
-This version of the sandbox contains fixes that allows the analysis via [flamegraph](https://docs.aztec.network/nightly/developers/docs/guides/smart_contracts/advanced/writing_efficient_contracts#inspecting-with-flamegraph) of the circuit. Version 2.0.2 has a bug in that functionality. 
+## Run example
 
-## QuickStart
-1. Start an Aztec sandbox 
-```
-PXE_PROVER_ENABLED=1 aztec start --sandbox
-```
-2. compile att_verifier and real_business_program
-```
-# inside att_verifier
-aztec-nargo compile
-aztec-postprocess-contract
-aztec codegen -o src/artifacts target
+Follow these steps to run a local and a devnet example. 
 
+1. Compile real_business_program and small_comm_business_program
+```
 # inside real_business_program
-aztec-nargo compile
-aztec-postprocess-contract
+aztec compile
+aztec codegen -o src/artifacts target
+
+# inside small_comm_business_program
+aztec compile
 aztec codegen -o src/artifacts target
 ```
-3. move `---.ts` in `src/artifacts/` and `---.json` in `target` from both `att_verifier` and `real_budiness_program` to `js_test/bindings/`. (Update the import path in `---.ts` for the jsons)
 
-4. run script
+2. Move `---.ts` in `src/artifacts/` and `---.json` in `target` from both `real_business_program` and `small_comm_business_program` to `js_test/bindings/`. (Update the import path in `---.ts` for the jsons)
+
+3. Build libraries
 ```
-# inside js_test
+# Build parsing library
+cd att_verifier_parsing
+yarn && yarn build
+
+# Build SDK
+cd ../aztec-attestation-sdk
+yarn && yarn build
+```
+
+4. Run Devnet example
+```
+cd ../example/js_test
 yarn
 
-# e2e test
-yarn start
-
-# deploy contract only
-yarn start:deploy
-
-# send tx to a deploied contract
-yarn start:verify
+yarn start:devnet
 ```
 
-## Adjust business logic
+5. Run local example
+```
+PXE_PROVER_ENABLED=1 aztec start --local-network
+yarn start:local
+```
 
-The current demo in `js_test` and specific business implementation in `real_business_program` takes `js_test/test_data/attestation_data.json` and:
-- verifies it is a valid attestation (`AttVerifier`)
-- checks the obtained plaintext has screen_name "primus_labs" and a followers_count larger than 1000 ( `BusinessProgram`)
+## Benchmarks
 
-### Aztec business contract
+These are the benchmarks for 3 testcases; 2 for commitment based attestations with different numbers of commitments (1 versus 65) and one for hash based attestion.
 
-To write a different demo, create your own [Aztec contract](https://docs.aztec.network/) that implements the function
+### Timings Local Network
+
+From MacBook Air with Apple M2 (8-core, 3.49 GHz) and 16 GB RAM:
+
+| Method                                 | Time (ms)    |
+|----------------------------------------|--------------|
+| Commitment-based verification          | 41113.49     |
+| Commitment-based verification (small)  | 36538.97     |
+| Hash-based verification                | 42784.63     |
+
+### Timings Devnet
+
+| Method                                 | Time (ms)    |
+|----------------------------------------|--------------|
+| Commitment-based verification          | -            |
+| Commitment-based verification (small)  | 68782.87     |
+| Hash-based verification                | -            |
+
+### Gatecounts
+
+| Method                                 | Circuitsize    |
+|----------------------------------------|--------------|
+| Commitment-based verification          | 711.763     |
+| Commitment-based verification (small)  | 321.513     |
+| Hash-based verification                | 794.646     |
+
+The flamegraphs for these 3 functions can be found in the `example` folder.
+
+### Note on zkVM Comparisons
+
+The benchmarks and tests in this repo measure the end-to-end performance of an Aztec transaction that verifies a Primus attestation. This means we are not only measuring the proving time of the circuit, but also include things like transaction submission and communication with a local network or devnet.
+
+Because of this, these results are not directly comparable to typical zkVM benchmarks. zkVM benchmarks usually focus on proving time in isolation and do not include blockchain-related aspects such as network interaction or state updates, so the numbers capture different kinds of costs.
+
+## Tutorial: How to implement your use-case
+
+If you are a developer that wants to integrate an Aztec Attestation verifier in your project, you need to do the following:
+1. Complete the Aztec smart contract using the `contract_template`
+2. Use the SDK (`aztec-attestation-sdk`) to deploy and call the Aztec smart contract. Do this with the inputs parsed from the attestation json.
+
+Check the `example` folder for example contracts and scripts. 
+
+### Step 1. Complete Aztec smart contract
+
+In `contract_template` you'll find a full Aztec smart contract that you can use for your business case. All that needs to be added are the checks on the attested data in `verify_comm` and `verify_hash`. For example, this is the template for `verify_comm`: 
+
 ```rust
-#[private]
-fn verify(plaintext: BoundedVec<u8, 4096>) -> bool {
-    // TODO
+// Verify commitment-based attestation and emit event upon success
+// TODO: insert here your own checks on msgs
+#[external("private")]
+fn verify_comm(
+    public_key_x: [u8; 32],
+    public_key_y: [u8; 32],
+    hash: [u8; 32],
+    signature: [u8; 64],
+    request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
+    allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
+    coms: BoundedVec<EmbeddedCurvePoint, MAX_COMMS>,
+    rnds: BoundedVec<Field, MAX_COMMS>,
+    msgs_chunks: BoundedVec<Field, MAX_COMMS>,
+    msgs: BoundedVec<u8, MAX_MSGS_LEN>,
+    H: EmbeddedCurvePoint, // G is fixed, H is fixed per business case
+    id: Field,
+) -> bool {
+    let allowed_url_matches_hashes: [Field; 2] = verify_attestation_comm(
+        public_key_x,
+        public_key_y,
+        hash,
+        signature,
+        request_urls,
+        allowed_urls,
+        coms,
+        rnds,
+        msgs_chunks,
+        H,
+    );
+
+    // TODO insert checks on msgs
+
+    BusinessProgram::at(self.address)
+        .check_values_emit_event(
+            self.msg_sender().unwrap(),
+            self.address,
+            id,
+            allowed_url_matches_hashes,
+            H,
+        )
+        .enqueue(self.context);
+
+    true
 }
 ```
 
-See `/real_business_program` for an example of how to parse the plaintext to JSON and obtain values from it. 
+To add the checks, you'll probably want to parse the data with the json parser that has already been added to the dependencies (`json_parser`), extract something and then do an assertion on that. See for examples of how to do this `example/real_business_program/src/main.nr` and `example/small_comm_business_program/src/main.nr`.
 
-### Deploying and calling the contract
+Note that the template contains support for both types of attestations (commitments based and hashing based), so if you're only supporting one of them, you can remove the additional code.
 
-In the script you have to:
-1. Deploy the `AttVerifier` (ultimately this could be deployed once).
-2. Deploy the `BusinessProgram`, specific for your usecase.
-3. Parse the data from the `attestation_json` correctly to input to the Aztec smart contract.
-4. Call `attVerifierContract.methods.verify_attestation` using the contract address of step (2) as one of the inputs.
+When the contract is complete, compile it and obtain the necessary artifacts for the script to use in step 2:
+```
+PXE_PROVER_ENABLED=1 aztec start --local-network
+# In your contract folder
+aztec-nargo compile
+aztec codegen -o src/artifacts target
+```
 
-See for an example `js_test/index.ts`. Note that currently the [Aztec js SDK](https://docs.aztec.network/nightly/developers/docs/guides/aztec-js) is the only SDK available for contract interaction. 
+### Step 2. Deploy and call Aztec smart contract
 
+Move `---.ts` in `src/artifacts/` and `---.json` in `target` from your smart contract into a folder that your script will be able to use. For example in `example/js_test` these files are expected to be placed in `example/js_test/bindings`. 
 
-## Functionality details and limitations
+The following code snippets show how to use the SDK on devnet. See the full examples in `example/js_test/verify-commitment-devnet.ts` and `verify-commitment-local.ts`. This works for Aztec version `3.0.0-devnet.6-patch.1`.
 
-All functionality mentioned below is in the circuit, hence constrained, unless prefaced by "(unconstrained)". The unconstrained functions are used to optimize the circuit by preventing computation from happening withing the circuit itself. 
+// START
+Initialize the client and deploy account (~2-5 minutes):
+```typescript
+import { Client, ContractHelpers, parseAttestationData } from "aztec-attestation-sdk";
+import { BusinessProgramContract } from "./bindings/BusinessProgram.js";
 
-Note that the call to emit a public log after the attestation is verified is not included in this functionality. (This is not working after upgrade to version `3.0.0-nightly`)
+const client = new Client({
+  nodeUrl: "https://next.devnet.aztec-labs.com",
+  mode: "devnet"
+});
+await client.initialize();
+const alice = await client.getAccount();
+```
 
-`AttVerifier.verify_attestation`: 
-- verifies signature
-- verifies `request_url` is the start of 1 of the `allowed_urls`. This is done in 2 steps:
+Parse attestation data:
+```typescript
+const attestationData = JSON.parse(fs.readFileSync(ATT_PATH, "utf-8"));
+const parsed = parseAttestationData(attestationData, {
+  maxResponseNum: MAX_RESPONSE_NUM,
+  allowedUrls: ALLOWED_URLS,
+  grumpkinBatchSize: GRUMPKIN_BATCH_SIZE,
+});
+
+// For commitment-based attestation, set your use case's unique H point
+const H = {
+  x: 19978178333943292355349418156359056918133515370613875064303296301489725624535n,
+  y: 13201885744872984780649110422697192888453633882501354541258277493771319153464n,
+  is_infinite: false
+};
+```
+
+Deploy contract (automatically hashes URLs and handles fees):
+```typescript
+const contract = await ContractHelpers.deployContract<BusinessProgramContract>(
+  BusinessProgramContract,
+  client,
+  {
+    admin: alice.address,
+    allowedUrls: ALLOWED_URLS,
+    pointH: H,
+    from: alice.address,
+    timeout: 1200000
+  }
+);
+```
+
+Verify attestation:
+```typescript
+const paymentMethod = client.getPaymentMethod();
+const result = await contract.methods.verify_comm(
+  parsed.publicKeyX,
+  parsed.publicKeyY,
+  parsed.hash,
+  parsed.signature,
+  parsed.requestUrls,
+  parsed.allowedUrls,
+  parsed.commitments,
+  parsed.randomScalars,
+  parsed.msgsChunks,
+  parsed.msgs,
+  H,
+  parsed.id
+).send({ from: alice.address, fee: { paymentMethod } }).wait({ timeout: 180000 });
+```
+
+Check for success event:
+```typescript
+if (result.status === "success") {
+  const events = await ContractHelpers.getSuccessEvents(
+    client.getNode(),
+    BusinessProgramContract.events.SuccessEvent,
+    result.blockNumber!
+  );
+  console.log("Event emitted:", events.length > 0);
+}
+await client.cleanup();
+```
+
+That's it! You have successfully created the Aztec Attestation verifier on devnet.
+
+> Note: If you prefer to implement your own Aztec functionality but still want to use the parsing library for the Primus attestation JSON, use `att_verifier_parsing`. 
+
+### Local Development
+
+For local sandbox testing, use `mode: "local"` and remove fee payment:
+```typescript
+const client = new Client({ nodeUrl: "http://localhost:8080", mode: "local" });
+await client.initialize();
+const alice = await client.getAccount(0); // instant
+
+// Deploy and verify without fees
+const contract = await ContractHelpers.deployContract(/* same params */);
+const result = await contract.methods.verify_comm(/* params */)
+  .send({ from: alice.address })
+  .wait();
+```
+
+## Implementation details
+
+### About `att_verifier_lib`
+
+Function `verify_attestation_comm`: 
+1. verifies signature
+2. verifies `request_url` is the start of 1 of the `allowed_urls`. This is done in 2 steps:
   - (unconstrained) obtain the index of the `allowed_url` it matches with
   - verifies that `allowed_url` is indeed the start of the `request_url`
-- decrypts ciphertext
-- extract the json part from the plaintext. This is done in 2 steps:
-  - (unconstrained) create a new vector `extracted_json` that only contains the json data, using the json_blocks input values
-  - verify that `extracted_json` indeed consists of the expected values from the plaintext
-- calls `BusinessProgram.verify` with the plaintext
+3. hashes the matched `allowed_url`. This is the output of the function
+4. verifies commitments; for all i `coms[i] == msgs_chunks[i]*G + rnds[i]*H`
 
-`BusinessProgram.verify`:
-- (unconstrained) replaces any non-ascii tokens by a fixed token `?`
-- verifies the sanitized array is correct
-- parses plaintext into json
-- obtains 2 values from the json
-- performs assertions on the 2 obtained values
+Function `verify_attestation_hashing`:
+1. The same as `verify_attestation_comm`
+2. The same as `verify_attestation_comm`
+3. The same as `verify_attestation_comm`
+4. verifies hashes; for all i `data_hashes[i] == sha256(plain_json_response_contents[i])`
 
-### Design choices / limitations Aztec
+### About `contract_template`
 
-The main reason for the form that the current functionality has, is because of the limitations that (private) Aztec smart contract functions have. Mainly:
-- limits on input sizes
-- limits on memory or circuitsize (we're sometimes not sure what exactly causes the issue)
+Contract storage contains:
+- `admin`; the address that can update allowed_url_hashes.
+- `allowed_url_hashes`; the hashes of allowed URLs. Storing complete URLs was too large for contract storage. 
+- `H`; Point H used in commitment verification. This can be omitted if only hash based attestations are verified. 
 
-When a limit seems to be crossed, compilation fails without an error message. 
-
-We've [asked](https://discord.com/channels/1113924620781883405/1425901440748224635) Aztec about the limits and given [example code](https://github.com/ewynx/aztec-contract-question) which crosses the limits. For this, we are awaiting response.  
-
-Design differences because of the limitations (note that "not supported" or "not possible" means compilation fails when incorporating it):
-- Input is split into all the different parts obtained from the `attestation_json`, because inputting the full byte array and parsing it is not possible.
-- `ciphertexts`: fixed size input instead of using a BoundedVec & small size of ciphertexts array, since a larger array is not supported. Ideally we would offer more flexibility here to support different usecases.
-- `allowed_urls`: saving/setting this in storage in either `AttVerifier` or `BusinessProgram` and obtaining it is not supported, so this is currently a direct input value to `verify_attestation`. Furthermore, this is an array of size 2 because larger is not supported.
-- `plaintext`: currently the size is set to 4096. Before, we were working with the assumption this could have size 8192 (or larger).
-- plaintext sanitization and json parsing is not done in the `AttVerifier`, but in the business logic, otherwise it doesn't work. 
-
-
-### Limitations of the implementation
-
-- There is no public event emitted after verifying the attestation. We added this previously when still working with `v2.0.2`, and are still trying to make this work after the update
-- Only 2 `allowed_urls` are inputted at the moment and they are not public data, as they should be
-- This is using a custom fork of the [Noir json_parser](https://github.com/hashcloak/noir_json_parser/releases/tag/v0.4.1-hc.1) that contains a few necessary tweaks
-
-## Benchmarks
-### Timing
-Calling `verify_attestation` in the ts script using a local Sandbox takes ~10s. 
-
-### Gatecount
-
-`AttVerifier.verify`:
-
-Opcode count: 71055, Total gates by opcodes: 546716, Circuit size: 550167
-
-`BusinessProgram.verify`:
-
-Opcode count: 190939, Total gates by opcodes: 346369, Circuit size: 356400
-
-For flamegraphs of both functions, see `att_verifier-AttVerifier-verify_attestation-flamegraph.svg` and `real_business_program-BusinessProgram-verify-flamegraph.svg`. Note that these can be obtained following [these steps](https://docs.aztec.network/nightly/developers/docs/guides/smart_contracts/advanced/writing_efficient_contracts#inspecting-with-flamegraph). 
+The verification function are both private functions that call a public function at the end. In the public function the `allowed_url_matches_hashes` and point `H` are checked against public storage. The public function will be enqueued and executed at a later moment. That is why we only know the full verification has passed when the public event is emitted after all private & public checks have passed. 
