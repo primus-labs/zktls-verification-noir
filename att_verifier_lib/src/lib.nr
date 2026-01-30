@@ -109,7 +109,7 @@ pub fn verify_attestation_hashing(
     for i in 0..2 {
         let hash = sha256_var(
             plain_json_response_contents[i].storage(),
-            plain_json_response_contents[i].len() as u64,
+            plain_json_response_contents[i].len(),
         );
         assert(hash == data_hashes[i]);
     }
