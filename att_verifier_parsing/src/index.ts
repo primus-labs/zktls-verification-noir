@@ -58,6 +58,10 @@ export function parseAttestationData(
   // Step 4: Parse attestation data
   const attDataParsed = JSON.parse(publicData.attestation.data);
   
+  if (!config.grumpkinBatchSize) {
+    throw new Error("grumpkinBatchSize is required for commitment-based parsing. Use parseHashingData for hash-based attestations.");
+  }
+  
   if (!attDataParsed["#grumpkin"]) {
     throw new Error("#grumpkin field not found in attestation data");
   }

@@ -57,7 +57,7 @@ export interface Point {
 export interface ParseConfig {
   maxResponseNum: number;
   allowedUrls: string[];
-  grumpkinBatchSize: number;
+  grumpkinBatchSize?: number;
 }
 
 export interface ParsedAttestationData {
