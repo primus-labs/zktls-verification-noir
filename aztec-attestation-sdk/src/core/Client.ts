@@ -1,18 +1,21 @@
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import type { AztecNode } from "@aztec/aztec.js/node";
 import { getInitialTestAccountsData } from "@aztec/accounts/testing";
-import { TestWallet } from "@aztec/test-wallet/server";
 import { getPXEConfig } from "@aztec/pxe/server";
-import { AccountManager } from "@aztec/aztec.js/wallet";
+import { EmbeddedWallet } from '@aztec/wallets/embedded';
 import { rm } from "node:fs/promises";
 import { Barretenberg } from "@aztec/bb.js";
 import { hashUrlsWithPoseidon2, parseAllowedUrls } from "att-verifier-parsing";
-import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee/testing";
-import { SponsoredFPCContract } from "@aztec/noir-contracts.js/SponsoredFPC";
+import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
-import { getContractInstanceFromInstantiationParams } from '@aztec/stdlib/contract';
 import { Fr, GrumpkinScalar } from "@aztec/aztec.js/fields";
-
+import {
+  getContractInstanceFromInstantiationParams,
+  type ContractInstanceWithAddress,
+} from '@aztec/aztec.js/contracts';
+import type { AccountManager } from '@aztec/aztec.js/wallet';
+import { SponsoredFPCContract, SponsoredFPCContractArtifact } from '@aztec/noir-contracts.js/SponsoredFPC';
+import { SPONSORED_FPC_SALT } from '@aztec/constants';
 export type NetworkMode = "local" | "devnet";
 
 export interface ClientConfig {
@@ -23,13 +26,20 @@ export interface ClientConfig {
   mode?: NetworkMode;
 }
 
+// Helper function from Aztec Starter https://github.com/AztecProtocol/aztec-starter/blob/v4.0.0-devnet.2-patch.1/src/utils/sponsored_fpc.ts
+async function getSponsoredFPCInstance(): Promise<ContractInstanceWithAddress> {
+  return await getContractInstanceFromInstantiationParams(SponsoredFPCContractArtifact, {
+    salt: new Fr(SPONSORED_FPC_SALT),
+  });
+}
+
 /**
  * Core Aztec client for PXE, wallet, and bb.
  * Supports both local sandbox and devnet modes.
  */
 export class Client {
   private node: AztecNode;
-  private wallet?: TestWallet;
+  private wallet?: EmbeddedWallet;
   private bb?: Barretenberg;
   private config: Required<ClientConfig>;
   private sponsoredFPC?: any;
@@ -67,17 +77,22 @@ export class Client {
       pxeConfig.dataDirectory = this.config.pxeDataDirectory;
       pxeConfig.proverEnabled = this.config.proverEnabled;
 
-      this.wallet = await TestWallet.create(this.node, pxeConfig);
+      // this.wallet = await EmbeddedWallet.create(this.node, pxeConfig);
+      this.wallet = await EmbeddedWallet.create(this.node, { pxeConfig: pxeConfig });
     } else {
       // Devnet mode
-      this.wallet = await TestWallet.create(this.node, { proverEnabled: this.config.proverEnabled });
+      // this.wallet = await EmbeddedWallet.create(this.node, { proverEnabled: this.config.proverEnabled });
+      this.wallet = await EmbeddedWallet.create(this.node, { pxeConfig: { proverEnabled: this.config.proverEnabled }} );
 
       // Setup sponsored FPC for devnet
       const SPONSORED_FPC_SALT = new Fr(0n);
-      this.sponsoredFPC = await getContractInstanceFromInstantiationParams(SponsoredFPCContract.artifact, {
-        salt: SPONSORED_FPC_SALT,
-      });
+      // this.sponsoredFPC = await getContractInstanceFromInstantiationParams(SponsoredFPCContract.artifact, {
+      //   salt: SPONSORED_FPC_SALT,
+      // });
+      this.sponsoredFPC = await getSponsoredFPCInstance();
+
       await this.wallet.registerContract(this.sponsoredFPC, SponsoredFPCContract.artifact);
+
       this.sponsoredPaymentMethod = new SponsoredFeePaymentMethod(this.sponsoredFPC.address);
     }
 
@@ -88,7 +103,7 @@ export class Client {
    * Retrieves a test account by index (0-2) for local mode.
    * For devnet mode, deploys a new Schnorr account.
    */
-  async getAccount(index: number = 0): Promise<AccountManager> {
+  async getAccount(index: number = 0) {
     this.ensureInitialized();
 
     if (this.config.mode === "local") {
@@ -113,7 +128,7 @@ export class Client {
    * Deploys a new Schnorr account on devnet with sponsored FPC.
    * This takes ~2-5 minutes on devnet.
    */
-  private async deployDevnetAccount(): Promise<AccountManager> {
+  private async deployDevnetAccount() {
     console.log('Deploying Schnorr account on devnet...');
 
     const secretKey = Fr.random();
@@ -131,12 +146,13 @@ export class Client {
     const deployMethod = await account.getDeployMethod();
 
     console.log('Deploying account on-chain (this takes ~2-5 minutes)...');
-    const tx = await deployMethod.send({
+    const receipt = await deployMethod.send({
       from: AztecAddress.ZERO,
-      fee: { paymentMethod: this.sponsoredPaymentMethod! }
-    }).wait({ timeout: 120000 });
+      fee: { paymentMethod: this.sponsoredPaymentMethod! },
+      wait: { timeout: 120000, returnReceipt: true }
+    });
 
-    console.log(`Account deployed! TX: ${tx.txHash}`);
+    console.log(`Account deployed! TX: ${receipt.txHash}`);
     return account;
   }
 
@@ -144,7 +160,7 @@ export class Client {
    * Retrieves multiple test accounts (local mode only).
    * For devnet, use getAccount() to deploy accounts one at a time.
    */
-  async getAccounts(count: number): Promise<AccountManager[]> {
+  async getAccounts(count: number) {
     if (this.config.mode === "devnet") {
       throw new Error("getAccounts() not supported in devnet mode. Use getAccount() to deploy individual accounts.");
     }
@@ -184,7 +200,7 @@ export class Client {
     return this.node;
   }
 
-  getWallet(): TestWallet {
+  getWallet(): EmbeddedWallet {
     this.ensureInitialized();
     return this.wallet!;
   }

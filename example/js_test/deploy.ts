@@ -17,13 +17,12 @@ const config = getPXEConfig();
 await rm("pxe", { recursive: true, force: true });
 config.dataDirectory = "pxe";
 config.proverEnabled = true;
-const wallet = await TestWallet.create(node, config);
+const wallet = await TestWallet.create(node, { pxeConfig: config });
 const [aliceAccount] = await getInitialTestAccountsData();
 let alice = await wallet.createSchnorrAccount(aliceAccount.secret, aliceAccount.salt);
 
 // deploy attVerifierContract
-const attVerifierContract = await AttVerifierContract.deploy(wallet).send({ from: aliceAccount.address })
-    .deployed();
+const { contract: attVerifierContract, instance: attVerifierInstance } = await AttVerifierContract.deploy(wallet).send({ from: aliceAccount.address, wait: { returnReceipt: true } });
 console.log("deployed attverifier");
 
 // prepare allowed urls
@@ -49,9 +48,8 @@ for (let url of allowedUrls) {
 }
 
 // deploy business program
-const businessProgram = await BusinessProgramContract.deploy(wallet, alice.address, hashedUrls)
-    .send({ from: aliceAccount.address }) // testAccount has fee juice and is registered in the deployer_wallet
-    .deployed();
+const { contract: businessProgram, instance: businessProgramInstance } = await BusinessProgramContract.deploy(wallet, alice.address, hashedUrls)
+    .send({ from: aliceAccount.address, wait: { returnReceipt: true } }); // testAccount has fee juice and is registered in the deployer_wallet
 console.log("deployed business program");
 
 
@@ -59,13 +57,13 @@ console.log("deployed business program");
 const instanceInfos = {
     attVerifierContract: {
         constructorArgs: [],
-        salt: attVerifierContract.instance.salt,
-        deployer: attVerifierContract.instance.deployer,
+        salt: attVerifierInstance.salt,
+        deployer: attVerifierInstance.deployer,
     },
     businessProgram: {
         constructorArgs: [alice.address, hashedUrls.map((value => `0x${value.toString(16)}`))],
-        salt: businessProgram.instance.salt,
-        deployer: businessProgram.instance.deployer,
+        salt: businessProgramInstance.salt,
+        deployer: businessProgramInstance.deployer,
     }
 };
 const json = JSON.stringify(instanceInfos, null, 2);

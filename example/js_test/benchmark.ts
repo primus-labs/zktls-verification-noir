@@ -8,8 +8,10 @@ import { BusinessProgramSmallCommContract, SuccessEvent as SuccessEventSmallComm
 import { performance } from "perf_hooks";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { rm } from "node:fs/promises";
-import { Barretenberg, Fr } from "@aztec/bb.js";
-import { getDecodedPublicEvents } from '@aztec/aztec.js/events';
+import { Barretenberg } from "@aztec/bb.js";
+import { getPublicEvents } from '@aztec/aztec.js/events';
+import { BlockNumber } from '@aztec/aztec.js/fields';
+import { TxExecutionResult } from "@aztec/stdlib/tx";
 
 const MAX_RESPONSE_NUM = 2;
 const ALLOWED_URL = ["https://api.binance.com", "https://www.okx.com", "https://x.com"];
@@ -28,7 +30,7 @@ const config = getPXEConfig();
 await rm("pxe", { recursive: true, force: true });
 config.dataDirectory = "pxe";
 config.proverEnabled = true;
-const wallet = await TestWallet.create(node, config);
+const wallet = await TestWallet.create(node, { pxeConfig: config });
 const [aliceAccount] = await getInitialTestAccountsData();
 let alice = await wallet.createSchnorrAccount(aliceAccount.secret, aliceAccount.salt);
 
@@ -52,7 +54,7 @@ const parsedComm = parseAttestationData(attestationDataComm, {
 });
 
 console.log("[2/4] Hashing allowed URLs...");
-const hashedUrlsComm = await hashUrlsWithPoseidon2(bb, parsedComm.allowedUrls, Fr);
+const hashedUrlsComm = await hashUrlsWithPoseidon2(bb, parsedComm.allowedUrls);
 
 // Point H for Pedersen commitment
 let H = { 
@@ -68,14 +70,13 @@ const businessProgramComm = await BusinessProgramContract.deploy(
   hashedUrlsComm, 
   H
 )
-  .send({ from: aliceAccount.address })
-  .deployed();
+  .send({ from: aliceAccount.address });
 console.log("Contract deployed at:", businessProgramComm.address.toString());
 
 console.log("[4/4] Verifying attestation with commitments...");
 const startComm = performance.now();
 
-let resultComm = await businessProgramComm.methods.verify_comm(
+let resultComm = await businessProgramComm.methods.__aztec_nr_internals__verify_comm(
   parsedComm.publicKeyX,
   parsedComm.publicKeyY,
   parsedComm.hash,
@@ -88,7 +89,7 @@ let resultComm = await businessProgramComm.methods.verify_comm(
   parsedComm.msgs,
   H,
   parsedComm.id
-).send({ from: aliceAccount.address }).wait();
+).send({ from: aliceAccount.address });
 
 const endComm = performance.now();
 const durationComm = (endComm - startComm).toFixed(2);
@@ -100,12 +101,11 @@ console.log("Status:", resultComm.status);
 console.log("Verification time:", durationComm, "ms");
 console.log("Block number:", resultComm.blockNumber);
 
-if (resultComm.status === "success") {
-  const success_event_comm = await getDecodedPublicEvents<SuccessEvent>(
+if (resultComm.executionResult === TxExecutionResult.SUCCESS) {
+  const success_event_comm = await getPublicEvents<SuccessEvent>(
     node,
     BusinessProgramContract.events.SuccessEvent,
-    resultComm.blockNumber!,
-    2
+    { fromBlock: BlockNumber(resultComm.blockNumber!), contractAddress: businessProgramComm.address }
   );
   console.log("Success event:", success_event_comm.length > 0 ? "OK - Event emitted" : "Not found");
 } else {
@@ -130,7 +130,7 @@ const parsedCommSmall = parseAttestationData(attestationDataCommSmall, {
 });
 
 console.log("[2/4] Hashing allowed URLs...");
-const hashedUrlsCommSmall = await hashUrlsWithPoseidon2(bb, parsedCommSmall.allowedUrls, Fr);
+const hashedUrlsCommSmall = await hashUrlsWithPoseidon2(bb, parsedCommSmall.allowedUrls);
 
 console.log("[3/4] Deploying business program contract (small)...");
 const businessProgramSmallComm = await BusinessProgramSmallCommContract.deploy(
@@ -139,14 +139,13 @@ const businessProgramSmallComm = await BusinessProgramSmallCommContract.deploy(
   hashedUrlsCommSmall, 
   H
 )
-  .send({ from: aliceAccount.address })
-  .deployed();
+  .send({ from: aliceAccount.address });
 console.log("Contract deployed at:", businessProgramSmallComm.address.toString());
 
 console.log("[4/4] Verifying attestation with commitments (small)...");
 const startCommSmall = performance.now();
 
-let resultCommSmall = await businessProgramSmallComm.methods.verify_comm(
+let resultCommSmall = await businessProgramSmallComm.methods.__aztec_nr_internals__verify_comm(
   parsedCommSmall.publicKeyX,
   parsedCommSmall.publicKeyY,
   parsedCommSmall.hash,
@@ -159,7 +158,7 @@ let resultCommSmall = await businessProgramSmallComm.methods.verify_comm(
   parsedCommSmall.msgs,
   H,
   parsedCommSmall.id
-).send({ from: aliceAccount.address }).wait();
+).send({ from: aliceAccount.address });
 
 const endCommSmall = performance.now();
 const durationCommSmall = (endCommSmall - startCommSmall).toFixed(2);
@@ -171,12 +170,11 @@ console.log("Status:", resultCommSmall.status);
 console.log("Verification time:", durationCommSmall, "ms");
 console.log("Block number:", resultCommSmall.blockNumber);
 
-if (resultCommSmall.status === "success") {
-  const success_event_comm_small = await getDecodedPublicEvents<SuccessEventSmallComm>(
+if (resultCommSmall.executionResult === TxExecutionResult.SUCCESS) {
+  const success_event_comm_small = await getPublicEvents<SuccessEventSmallComm>(
     node,
     BusinessProgramSmallCommContract.events.SuccessEvent,
-    resultCommSmall.blockNumber!,
-    2
+    { fromBlock: BlockNumber(resultCommSmall.blockNumber!), contractAddress: businessProgramSmallComm.address }
   );
   console.log("Success event:", success_event_comm_small.length > 0 ? "OK - Event emitted" : "Not found");
 } else {
@@ -201,12 +199,12 @@ const parsedHash = parseHashingData(attestationDataHash, {
 });
 
 console.log("[2/3] Hashing allowed URLs...");
-const hashedUrlsHash = await hashUrlsWithPoseidon2(bb, parsedHash.allowedUrls, Fr);
+const hashedUrlsHash = await hashUrlsWithPoseidon2(bb, parsedHash.allowedUrls);
 
 console.log("[3/3] Verifying attestation with hashing...");
 const startHash = performance.now();
 
-let resultHash = await businessProgramComm.methods.verify_hash(
+let resultHash = await businessProgramComm.methods.__aztec_nr_internals__verify_hash(
   parsedHash.publicKeyX,
   parsedHash.publicKeyY,
   parsedHash.hash,
@@ -216,7 +214,7 @@ let resultHash = await businessProgramComm.methods.verify_hash(
   parsedHash.dataHashes,
   parsedHash.plainJsonResponses,
   parsedHash.id
-).send({ from: aliceAccount.address }).wait();
+).send({ from: aliceAccount.address });
 
 const endHash = performance.now();
 const durationHash = (endHash - startHash).toFixed(2);
@@ -228,12 +226,11 @@ console.log("Status:", resultHash.status);
 console.log("Verification time:", durationHash, "ms");
 console.log("Block number:", resultHash.blockNumber);
 
-if (resultHash.status === "success") {
-  const success_event_hash = await getDecodedPublicEvents<SuccessEvent>(
+if (resultHash.executionResult === TxExecutionResult.SUCCESS) {
+  const success_event_hash = await getPublicEvents<SuccessEvent>(
     node,
     BusinessProgramContract.events.SuccessEvent,
-    resultHash.blockNumber!,
-    2
+    { fromBlock: BlockNumber(resultHash.blockNumber!), contractAddress: businessProgramComm.address }
   );
   console.log("Success event:", success_event_hash.length > 0 ? "OK - Event emitted" : "Not found");
 } else {

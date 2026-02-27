@@ -1,6 +1,7 @@
 import fs from "fs";
 import { parseAttestationData, Client, ContractHelpers } from "aztec-attestation-sdk";
 import { BusinessProgramSmallCommContract } from "./bindings/BusinessProgramSmallComm.js";
+import { TxExecutionResult } from "@aztec/stdlib/tx";
 
 /**
  * Example: Verify commitment-based attestation on DEVNET
@@ -62,7 +63,7 @@ if (paymentMethod) {
   sendOptions.fee = { paymentMethod };
 }
 
-const result = await contract.methods.verify_comm(
+const result = await contract.methods.__aztec_nr_internals__verify_comm(
   parsed.publicKeyX,
   parsed.publicKeyY,
   parsed.hash,
@@ -75,18 +76,18 @@ const result = await contract.methods.verify_comm(
   parsed.msgs,
   H,
   parsed.id
-).send(sendOptions).wait({ timeout: TX_TIMEOUT });
+).send({ ...sendOptions, wait: { timeout: TX_TIMEOUT } });
 
 console.log("\n" + "=".repeat(80));
 console.log("Result:", result.status);
 console.log("Block:", result.blockNumber);
 
-if (result.status === "success") {
+if (result.executionResult === TxExecutionResult.SUCCESS) {
   const events = await ContractHelpers.getSuccessEvents(
     client.getNode(),
     BusinessProgramSmallCommContract.events.SuccessEvent,
     result.blockNumber!,
-    2
+    contract.address
   );
   console.log("Event emitted:", events.length > 0 ? "OK" : "Not OK");
 }

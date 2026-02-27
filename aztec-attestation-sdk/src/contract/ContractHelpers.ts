@@ -1,7 +1,8 @@
 import type { AztecAddress } from "@aztec/aztec.js/addresses";
 import type { AztecNode } from "@aztec/aztec.js/node";
-import { getDecodedPublicEvents } from "@aztec/aztec.js/events";
+import { getPublicEvents } from '@aztec/aztec.js/events';
 import type { Client } from "../core/Client.js";
+import { BlockNumber } from "@aztec/aztec.js/fields";
 
 /**
  * Embedded curve point for Pedersen commitments.
@@ -40,7 +41,7 @@ export class ContractHelpers {
    * Deploys an attestation verifier contract with hashed URLs.
    * Automatically handles fee payment for devnet mode.
    */
-  static async deployContract<T>(
+  static async deployContract<T extends { address: AztecAddress }>(
     contractClass: any,
     client: Client,
     params: ContractDeploymentParams
@@ -62,16 +63,13 @@ export class ContractHelpers {
       }
     }
 
-    const deployment = contractClass
+    const sendOpts = params.timeout
+      ? { ...sendOptions, wait: { timeout: params.timeout } }
+      : sendOptions;
+
+    return await contractClass
       .deploy(wallet, ...deploymentArgs)
-      .send(sendOptions);
-
-    // Add timeout if specified
-    if (params.timeout) {
-      return await deployment.deployed({ timeout: params.timeout });
-    }
-
-    return await deployment.deployed();
+      .send(sendOpts);
   }
 
   /**
@@ -81,10 +79,14 @@ export class ContractHelpers {
     node: AztecNode,
     eventType: any,
     blockNumber: number,
-    maxLookback: number = 2
-  ): Promise<SuccessEvent[]> {
+    contract_address: AztecAddress
+  ) {
     try {
-      return await getDecodedPublicEvents(node, eventType, blockNumber, maxLookback);
+      // return await getDecodedPublicEvents(node, eventType, blockNumber, maxLookback);
+      return await getPublicEvents<{ amount: bigint; sender: AztecAddress }>(
+        node, eventType,
+        { contractAddress: contract_address, fromBlock: BlockNumber(blockNumber) },
+      );
     } catch (error) {
       console.error("Error fetching success events:", error);
       return [];

@@ -9,7 +9,9 @@ import { performance } from "perf_hooks";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { rm } from "node:fs/promises";
 import { Barretenberg } from "@aztec/bb.js";
-import { getDecodedPublicEvents } from '@aztec/aztec.js/events';
+import { getPublicEvents } from '@aztec/aztec.js/events';
+import { BlockNumber } from '@aztec/aztec.js/fields';
+import { TxExecutionResult } from "@aztec/stdlib/tx";
 import { Fr } from "@aztec/aztec.js/fields";
 
 const MAX_RESPONSE_NUM = 2;
@@ -29,7 +31,7 @@ const config = getPXEConfig();
 await rm("pxe", { recursive: true, force: true });
 config.dataDirectory = "pxe";
 config.proverEnabled = true;
-const wallet = await TestWallet.create(node, config);
+const wallet = await TestWallet.create(node, { pxeConfig: config });
 const [aliceAccount] = await getInitialTestAccountsData();
 let alice = await wallet.createSchnorrAccount(aliceAccount.secret, aliceAccount.salt);
 
@@ -140,14 +142,13 @@ const businessProgramSmallComm = await BusinessProgramSmallCommContract.deploy(
   hashedUrlsCommSmall, 
   H
 )
-  .send({ from: aliceAccount.address })
-  .deployed();
+  .send({ from: aliceAccount.address });
 console.log("Contract deployed at:", businessProgramSmallComm.address.toString());
 
 console.log("[4/4] Verifying attestation with commitments (small)...");
 const startCommSmall = performance.now();
 
-let resultCommSmall = await businessProgramSmallComm.methods.verify_comm(
+let resultCommSmall = await businessProgramSmallComm.methods.__aztec_nr_internals__verify_comm(
   parsedCommSmall.publicKeyX,
   parsedCommSmall.publicKeyY,
   parsedCommSmall.hash,
@@ -160,7 +161,7 @@ let resultCommSmall = await businessProgramSmallComm.methods.verify_comm(
   parsedCommSmall.msgs,
   H,
   parsedCommSmall.id
-).send({ from: aliceAccount.address }).wait();
+).send({ from: aliceAccount.address });
 
 const endCommSmall = performance.now();
 const durationCommSmall = (endCommSmall - startCommSmall).toFixed(2);
@@ -172,12 +173,11 @@ console.log("Status:", resultCommSmall.status);
 console.log("Verification time:", durationCommSmall, "ms");
 console.log("Block number:", resultCommSmall.blockNumber);
 
-if (resultCommSmall.status === "success") {
-  const success_event_comm_small = await getDecodedPublicEvents<SuccessEventSmallComm>(
+if (resultCommSmall.executionResult === TxExecutionResult.SUCCESS) {
+  const success_event_comm_small = await getPublicEvents<SuccessEventSmallComm>(
     node,
     BusinessProgramSmallCommContract.events.SuccessEvent,
-    resultCommSmall.blockNumber!,
-    2
+    { fromBlock: BlockNumber(resultCommSmall.blockNumber!), contractAddress: businessProgramSmallComm.address }
   );
   console.log("Success event:", success_event_comm_small.length > 0 ? "OK - Event emitted" : "Not found");
 } else {
