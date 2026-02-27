@@ -1,4 +1,4 @@
-use dep::aztec::macros::aztec;
+use aztec::macros::aztec;
 
 /**
   * An Aztec smart contract template for usage of Primus Noir.
@@ -47,7 +47,7 @@ pub contract BusinessProgram {
     // Set admin that is allowed to adjust allowed_url_hashes
     #[external("public")]
     fn set_admin(new_admin: AztecAddress) {
-        assert(self.storage.admin.read().eq(self.msg_sender().unwrap()), "caller is not admin");
+        assert(self.storage.admin.read().eq(self.msg_sender()), "caller is not admin");
         self.storage.admin.write(new_admin);
     }
 
@@ -64,7 +64,7 @@ pub contract BusinessProgram {
     // Update allowed_url_hashes (only callable by admin)
     #[external("public")]
     fn update_allowed_url_hashes(allowed_url_hashes: [Field; 3]) {
-        assert(self.storage.admin.read().eq(self.msg_sender().unwrap()), "caller is not admin");
+        assert(self.storage.admin.read().eq(self.msg_sender()), "caller is not admin");
         self.storage.allowed_url_hashes.write(allowed_url_hashes);
     }
 
@@ -160,7 +160,7 @@ pub contract BusinessProgram {
 
         BusinessProgram::at(self.address)
             .check_values_emit_event(
-                self.msg_sender().unwrap(),
+                self.msg_sender(),
                 self.address,
                 id,
                 allowed_url_matches_hashes,
@@ -200,7 +200,7 @@ pub contract BusinessProgram {
 
         BusinessProgram::at(self.address)
             .check_urls_emit_event(
-                self.msg_sender().unwrap(),
+                self.msg_sender(),
                 self.address,
                 id,
                 allowed_url_matches_hashes,

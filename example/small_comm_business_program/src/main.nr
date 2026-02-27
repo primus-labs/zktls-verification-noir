@@ -1,12 +1,13 @@
-use dep::aztec::macros::aztec;
+use aztec::macros::aztec;
+
 #[aztec]
 pub contract BusinessProgramSmallComm {
-    use dep::json_parser::JSON512b;
     use att_verifier_lib::verify_attestation_comm;
     use aztec::macros::{events::event, functions::{external, initializer}};
     use aztec::macros::storage::storage;
-    use aztec::protocol_types::address::AztecAddress;
-    use aztec::state_vars::{public_immutable::PublicImmutable, public_mutable::PublicMutable};
+    use aztec::protocol::address::AztecAddress;
+    use aztec::state_vars::{PublicImmutable, PublicMutable};
+    use json_parser::JSON512b;
     use std::embedded_curve_ops::EmbeddedCurvePoint;
 
     global MAX_URL_LEN: u32 = 1024;
@@ -29,7 +30,7 @@ pub contract BusinessProgramSmallComm {
 
     #[external("public")]
     fn set_admin(new_admin: AztecAddress) {
-        assert(self.storage.admin.read().eq(self.msg_sender().unwrap()), "caller is not admin");
+        assert(self.storage.admin.read().eq(self.msg_sender()), "caller is not admin");
         self.storage.admin.write(new_admin);
     }
 
@@ -45,7 +46,7 @@ pub contract BusinessProgramSmallComm {
     // TODO - allow update single url with index?
     #[external("public")]
     fn update_allowed_url_hashes(allowed_url_hashes: [Field; 3]) {
-        assert(self.storage.admin.read().eq(self.msg_sender().unwrap()), "caller is not admin");
+        assert(self.storage.admin.read().eq(self.msg_sender()), "caller is not admin");
         self.storage.allowed_url_hashes.write(allowed_url_hashes);
     }
 
@@ -113,7 +114,7 @@ pub contract BusinessProgramSmallComm {
 
         BusinessProgramSmallComm::at(self.address)
             .check_values_emit_event(
-                self.msg_sender().unwrap(),
+                self.msg_sender(),
                 self.address,
                 id,
                 allowed_url_matches_hashes,

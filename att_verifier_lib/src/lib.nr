@@ -1,4 +1,4 @@
-use dep::poseidon::poseidon2::Poseidon2;
+use poseidon::poseidon2::Poseidon2;
 use sha256::sha256_var;
 use std::embedded_curve_ops::{
     embedded_curve_add, EmbeddedCurvePoint, EmbeddedCurveScalar, fixed_base_scalar_mul,
