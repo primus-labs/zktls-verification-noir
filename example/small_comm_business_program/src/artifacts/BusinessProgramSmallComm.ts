@@ -114,20 +114,11 @@ H: {
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public declare methods: {
     
-    /** __aztec_nr_internals__check_values_emit_event(sender: struct, contract_address: struct, id: field, allowed_url_matches_hashes: array, H: struct) */
-    __aztec_nr_internals__check_values_emit_event: ((sender: AztecAddressLike, contract_address: AztecAddressLike, id: FieldLike, allowed_url_matches_hashes: FieldLike[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** check_values_emit_event(sender: struct, contract_address: struct, id: field, allowed_url_matches_hashes: array, H: struct) */
+    check_values_emit_event: ((sender: AztecAddressLike, contract_address: AztecAddressLike, id: FieldLike, allowed_url_matches_hashes: FieldLike[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** __aztec_nr_internals__constructor(admin: struct, allowed_url_hashes: array, H: struct) */
-    __aztec_nr_internals__constructor: ((admin: AztecAddressLike, allowed_url_hashes: FieldLike[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
-
-    /** __aztec_nr_internals__set_admin(new_admin: struct) */
-    __aztec_nr_internals__set_admin: ((new_admin: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
-
-    /** __aztec_nr_internals__update_allowed_url_hashes(allowed_url_hashes: array) */
-    __aztec_nr_internals__update_allowed_url_hashes: ((allowed_url_hashes: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
-
-    /** __aztec_nr_internals__verify_comm(public_key_x: array, public_key_y: array, hash: array, signature: array, request_urls: array, allowed_urls: array, coms: struct, rnds: struct, msgs_chunks: struct, msgs: struct, H: struct, id: field) */
-    __aztec_nr_internals__verify_comm: ((public_key_x: (bigint | number)[], public_key_y: (bigint | number)[], hash: (bigint | number)[], signature: (bigint | number)[], request_urls: (bigint | number)[][], allowed_urls: (bigint | number)[][], coms: { x: FieldLike, y: FieldLike, is_infinite: boolean }[], rnds: FieldLike[], msgs_chunks: FieldLike[], msgs: (bigint | number)[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }, id: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** constructor(admin: struct, allowed_url_hashes: array, H: struct) */
+    constructor: ((admin: AztecAddressLike, allowed_url_hashes: FieldLike[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** process_message(message_ciphertext: struct, message_context: struct) */
     process_message: ((message_ciphertext: FieldLike[], message_context: { tx_hash: FieldLike, unique_note_hashes_in_tx: FieldLike[], first_nullifier_in_tx: FieldLike, recipient: AztecAddressLike }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
@@ -135,8 +126,17 @@ H: {
     /** public_dispatch(selector: field) */
     public_dispatch: ((selector: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
+    /** set_admin(new_admin: struct) */
+    set_admin: ((new_admin: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
     /** sync_state() */
     sync_state: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** update_allowed_url_hashes(allowed_url_hashes: array) */
+    update_allowed_url_hashes: ((allowed_url_hashes: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** verify_comm(public_key_x: array, public_key_y: array, hash: array, signature: array, request_urls: array, allowed_urls: array, coms: struct, rnds: struct, msgs_chunks: struct, msgs: struct, H: struct, id: field) */
+    verify_comm: ((public_key_x: (bigint | number)[], public_key_y: (bigint | number)[], hash: (bigint | number)[], signature: (bigint | number)[], request_urls: (bigint | number)[][], allowed_urls: (bigint | number)[][], coms: { x: FieldLike, y: FieldLike, is_infinite: boolean }[], rnds: FieldLike[], msgs_chunks: FieldLike[], msgs: (bigint | number)[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }, id: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
   };
 
   
