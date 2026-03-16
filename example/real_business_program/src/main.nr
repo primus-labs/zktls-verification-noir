@@ -1,18 +1,23 @@
 use aztec::macros::aztec;
 #[aztec]
 pub contract BusinessProgram {
-    use ::json_parser::{JSON2055, JSON2kb};
-    use att_verifier_lib::{verify_attestation_comm, verify_attestation_hashing};
+    use att_verifier_lib::verify_attestation_comm_poseidon;
     use aztec::macros::{events::event, functions::{external, initializer}};
     use aztec::macros::storage::storage;
     use aztec::protocol::address::AztecAddress;
     use aztec::state_vars::{PublicImmutable, PublicMutable};
     use std::embedded_curve_ops::EmbeddedCurvePoint;
 
-    global MAX_URL_LEN: u32 = 1024;
-    global MAX_MSGS_LEN: u32 = 2054;
-    global MAX_CONTENT_LEN: u32 = 1000;
     global MAX_COMMS: u32 = 65;
+
+    // Number of application-specific values extracted from the JSON response
+    // by the attestation service. For this example: 6 numeric strings from
+    // attestation_data_grumpkin.json, .data[0][0..5]
+    global NUM_VALUES: u32 = 6;
+
+    // Digest serialization length: 4 + MAX_COMMS * 5 + NUM_VALUES
+    // = 4 + 65 * 5 + 6 = 335
+    global DIGEST_LEN: u32 = 335;
 
     #[event]
     struct SuccessEvent {
@@ -43,7 +48,6 @@ pub contract BusinessProgram {
         self.storage.H.initialize(H);
     }
 
-    // TODO - allow update single url with index?
     #[external("public")]
     fn update_allowed_url_hashes(allowed_url_hashes: [Field; 3]) {
         assert(self.storage.admin.read().eq(self.msg_sender()), "caller is not admin");
@@ -78,62 +82,55 @@ pub contract BusinessProgram {
         self.emit(SuccessEvent { sender, contract_address, id });
     }
 
-    #[external("public")]
-    fn check_urls_emit_event(
-        sender: AztecAddress,
-        contract_address: AztecAddress,
-        id: Field,
-        allowed_url_matches_hashes: [Field; 2],
-    ) {
-        // Check allowed_url_matches_hashes are in storage
-        let allowed_url_hashes: [Field; 3] = self.storage.allowed_url_hashes.read();
-        for i in 0..2 {
-            let check_hash = allowed_url_matches_hashes[i];
-            let mut found = false;
-            for j in 0..3 {
-                if allowed_url_hashes[j] == check_hash {
-                    found = true;
-                }
-            }
-            assert(found);
-        }
-
-        self.emit(SuccessEvent { sender, contract_address, id });
-    }
-
-    // Check H equals the publicly known value
-    // do asserts on msgs
-    // Opcode count: 208423, Total gates by opcodes: 696795, Circuit size: 711763
+    /// Verify attestation with Poseidon2 digest binding.
+    ///
+    /// URL matching and JSON parsing are performed off-chain by the attestation
+    /// service. The service extracts values from the API response, computes
+    /// Poseidon2 URL hashes, and signs a Poseidon2 digest of ALL data.
+    ///
+    /// The extracted_values array contains the business-relevant values parsed
+    /// from the JSON response (e.g., numeric values, encoded strings).
+    /// These are application-specific and defined by NUM_VALUES.
+    ///
+    /// Security:
+    ///   - ECDSA signature: attestation came from trusted service
+    ///   - Poseidon2 binding: all inputs match the signed attestation
+    ///   - On-chain check: URL hashes are in the approved set
+    ///   - Commitment check: response data integrity
     #[external("private")]
     fn verify_comm(
         public_key_x: [u8; 32],
         public_key_y: [u8; 32],
         hash: [u8; 32],
         signature: [u8; 64],
-        request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
-        allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
+        allowed_url_matches_hashes: [Field; 2],
         coms: BoundedVec<EmbeddedCurvePoint, MAX_COMMS>,
         rnds: BoundedVec<Field, MAX_COMMS>,
         msgs_chunks: BoundedVec<Field, MAX_COMMS>,
-        msgs: BoundedVec<u8, MAX_MSGS_LEN>,
-        H: EmbeddedCurvePoint, // G is fixed, H is fixed per business case
+        extracted_values: [Field; NUM_VALUES],
+        H: EmbeddedCurvePoint,
         id: Field,
     ) -> bool {
-        let allowed_url_matches_hashes: [Field; 2] = verify_attestation_comm(
+        verify_attestation_comm_poseidon::<MAX_COMMS, NUM_VALUES, DIGEST_LEN>(
             public_key_x,
             public_key_y,
             hash,
             signature,
-            request_urls,
-            allowed_urls,
+            allowed_url_matches_hashes,
             coms,
             rnds,
             msgs_chunks,
+            extracted_values,
             H,
         );
-        // Check values
-        // TODO what assert to do here?
-        let _numbers_as_strings = get_values(msgs);
+
+        // Application-specific assertions on the extracted values.
+        // These values were parsed from the JSON response by the attestation
+        // service and are bound to the ECDSA signature via the Poseidon2 digest.
+        //
+        // Example: for attestation_data_grumpkin.json, extracted_values contains
+        // 6 numeric values from .data[0][0..5]. Add business logic checks here:
+        // assert(extracted_values[0] > some_threshold, "value below threshold");
 
         BusinessProgram::at(self.address)
             .check_values_emit_event(
@@ -147,83 +144,4 @@ pub contract BusinessProgram {
 
         true
     }
-
-    // Opcode count: 253113, Total gates by opcodes: 778309, Circuit size: 794646
-    #[external("private")]
-    fn verify_hash(
-        public_key_x: [u8; 32],
-        public_key_y: [u8; 32],
-        hash: [u8; 32],
-        signature: [u8; 64],
-        request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
-        allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
-        data_hashes: [[u8; 32]; 2],
-        plain_json_response_contents: [BoundedVec<u8, MAX_CONTENT_LEN>; 2],
-        id: Field, // id for this attestation
-    ) -> bool {
-        let allowed_url_matches_hashes: [Field; 2] = verify_attestation_hashing(
-            public_key_x,
-            public_key_y,
-            hash,
-            signature,
-            request_urls,
-            allowed_urls,
-            data_hashes,
-            plain_json_response_contents,
-        );
-
-        for i in 0..2 {
-            // Parse plaintext to JSON and obtain the custom values we want to check
-            let (base_ccy, inst_id_code) = get_values2(plain_json_response_contents[i]);
-
-            // TODO what to assert about base_ccy and inst_id_code
-        }
-
-        BusinessProgram::at(self.address)
-            .check_urls_emit_event(
-                self.msg_sender(),
-                self.address,
-                id,
-                allowed_url_matches_hashes,
-            )
-            .enqueue(self.context);
-
-        true
-    }
-
-    #[contract_library_method]
-    fn get_values(plaintext: BoundedVec<u8, MAX_MSGS_LEN>) -> [BoundedVec<u8, 20>; 6] {
-        let json = JSON2055::parse_bounded_vec_json(plaintext);
-
-        // for attestation_data_grumpkin.json
-        // obtain .data[0], this is an array of 6 decimal numbers, which we'll read out as string
-        let key0: BoundedVec<u8, 4> = BoundedVec::from_array("data".as_bytes());
-        let data0 = json.get_array(key0).unwrap().get_array_from_array(0).unwrap();
-
-        [
-            data0.get_string_from_array(0).unwrap(),
-            data0.get_string_from_array(1).unwrap(),
-            data0.get_string_from_array(2).unwrap(),
-            data0.get_string_from_array(3).unwrap(),
-            data0.get_string_from_array(4).unwrap(),
-            data0.get_string_from_array(5).unwrap(),
-        ]
-    }
-
-    #[contract_library_method]
-    fn get_values2(plaintext: BoundedVec<u8, MAX_CONTENT_LEN>) -> (u64, BoundedVec<u8, 10>) {
-        let json = JSON2kb::parse_bounded_vec_json(plaintext);
-        // for eth_hash.json
-        let key0: BoundedVec<u8, 15> = BoundedVec::from_array("makerCommission".as_bytes());
-        let maker_commission = json.get_number(key0).unwrap();
-
-        let key1: BoundedVec<u8, 15> = BoundedVec::from_array("commissionRates".as_bytes());
-        let commission_rate_obj: JSON2kb = json.get_object(key1).unwrap();
-
-        let key2: BoundedVec<u8, 5> = BoundedVec::from_array("maker".as_bytes());
-        let maker_rate_str: BoundedVec<u8, 10> =
-            commission_rate_obj.get_string_from_path([key2]).unwrap();
-        (maker_commission, maker_rate_str)
-    }
-
 }
