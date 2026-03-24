@@ -1,10 +1,9 @@
-use dep::poseidon::poseidon2::Poseidon2;
+use poseidon::poseidon2::Poseidon2;
 use sha256::sha256_var;
 use std::embedded_curve_ops::{
-    embedded_curve_add, EmbeddedCurvePoint, EmbeddedCurveScalar, fixed_base_scalar_mul,
+    EmbeddedCurvePoint, EmbeddedCurveScalar,
     multi_scalar_mul,
 };
-use string_search::{StringBody, StringBody1024, SubString, SubString1024};
 
 global MAX_URL_LEN: u32 = 1024;
 global MAX_CONTENT_LEN: u32 = 1000;
@@ -30,38 +29,43 @@ pub fn verify_attestation_comm<let MAX_COMMS: u32>(
         // Safety: Get the index of the url in allowed_urls that matches request_url (unconstrained) and then check it
         let (found, url_index) = unsafe { get_allowed_url_index(request_urls[i], allowed_urls) };
         assert(found == true, "No allowed URL matches the request URL");
-        let request_url_haystack: StringBody1024 =
-            StringBody::new(request_urls[i].storage(), request_urls[i].len());
+        // Verify that the particular allowed_url is substring of the request_url
         let allowed_url = allowed_urls[url_index];
-        let needle: SubString1024 = SubString::new(allowed_url.storage(), allowed_url.len());
-
-        let (result, match_position): (bool, u32) = request_url_haystack.substring_match(needle);
-
-        // A match result is only valid if the match position is 0 (i.e., the allowed_url is a prefix of request_url)
-        assert(result & (match_position == 0), "URL check failed");
+        for j in 0..MAX_URL_LEN {
+            if j < allowed_url.len() {
+                assert_eq(request_urls[i].storage()[j], allowed_url.storage()[j], "URL check failed");
+            }
+        }
         let mut hash_input: [Field; 1024] = [0; 1024];
         for j in 0..1024 {
             if j < allowed_url.len() {
                 hash_input[j] = allowed_url.storage()[j] as Field;
             }
         }
-        // TODO when larger storage size in contract is supported, hashing is not needed anymore
-        // TODO can we hash without the padding of zeroes?
         allowed_url_matches[i] = Poseidon2::hash(hash_input, 1024);
     }
 
-    // 3. Check commitments
+    let G = EmbeddedCurvePoint::generator();
+    let inf = EmbeddedCurvePoint::point_at_infinity();
+    let zero_scalar = EmbeddedCurveScalar { lo: 0, hi: 0 };
+    let one_scalar = EmbeddedCurveScalar { lo: 1, hi: 0 };
+    let mut lhs_points: [EmbeddedCurvePoint; 2 * MAX_COMMS] = [inf; 2 * MAX_COMMS];
+    let mut lhs_scalars: [EmbeddedCurveScalar; 2 * MAX_COMMS] = [zero_scalar; 2 * MAX_COMMS];
+    let mut com_points: [EmbeddedCurvePoint; MAX_COMMS] = [inf; MAX_COMMS];
+    let mut com_scalars: [EmbeddedCurveScalar; MAX_COMMS] = [zero_scalar; MAX_COMMS];
+
     for i in 0..MAX_COMMS {
         if i < coms.len() {
-            assert(
-                embedded_curve_add(
-                    fixed_base_scalar_mul(EmbeddedCurveScalar::from_field(msgs_chunks.get(i))),
-                    multi_scalar_mul([H], [EmbeddedCurveScalar::from_field(rnds.get(i))]),
-                )
-                    == coms.get(i),
-            );
+            lhs_points[2 * i] = G;
+            lhs_points[2 * i + 1] = H;
+            lhs_scalars[2 * i] = EmbeddedCurveScalar::from_field(msgs_chunks.get(i));
+            lhs_scalars[2 * i + 1] = EmbeddedCurveScalar::from_field(rnds.get(i));
+            com_points[i] = coms.get(i);
+            com_scalars[i] = one_scalar;
         }
     }
+
+    assert(multi_scalar_mul(lhs_points, lhs_scalars) == multi_scalar_mul(com_points, com_scalars));
 
     allowed_url_matches
 }
@@ -85,23 +89,19 @@ pub fn verify_attestation_hashing(
         // Safety: Get the index of the url in allowed_urls that matches request_url (unconstrained) and then check it
         let (found, url_index) = unsafe { get_allowed_url_index(request_urls[i], allowed_urls) };
         assert(found == true, "No allowed URL matches the request URL");
-        let request_url_haystack: StringBody1024 =
-            StringBody::new(request_urls[i].storage(), request_urls[i].len());
+        // Verify that the particular allowed_url is substring of the request_url
         let allowed_url = allowed_urls[url_index];
-        let needle: SubString1024 = SubString::new(allowed_url.storage(), allowed_url.len());
-
-        let (result, match_position): (bool, u32) = request_url_haystack.substring_match(needle);
-
-        // A match result is only valid if the match position is 0 (i.e., the allowed_url is a prefix of request_url)
-        assert(result & (match_position == 0), "URL check failed");
+        for j in 0..MAX_URL_LEN {
+            if j < allowed_url.len() {
+                assert_eq(request_urls[i].storage()[j], allowed_url.storage()[j], "URL check failed");
+            }
+        }
         let mut hash_input: [Field; 1024] = [0; 1024];
         for j in 0..1024 {
             if j < allowed_url.len() {
                 hash_input[j] = allowed_url.storage()[j] as Field;
             }
         }
-        // TODO when larger storage size in contract is supported, hashing is not needed anymore
-        // TODO can we hash without the padding of zeroes?
         allowed_url_matches[i] = Poseidon2::hash(hash_input, 1024);
     }
 
@@ -149,7 +149,7 @@ unconstrained fn search(
 
 unconstrained fn get_allowed_url_index(
     request_url: BoundedVec<u8, MAX_URL_LEN>,
-    allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3], // TODO this probably shouldn't have a fixed len
+    allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
 ) -> (bool, u32) {
     let mut found = false;
     let mut index: u32 = 3050913689; // max u32 value to indicate "not found"
