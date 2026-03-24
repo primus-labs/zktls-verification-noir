@@ -67,9 +67,10 @@ export class ContractHelpers {
       ? { ...sendOptions, wait: { timeout: params.timeout } }
       : sendOptions;
 
-    return await contractClass
+    const sentTx: any = await contractClass
       .deploy(wallet, ...deploymentArgs)
       .send(sendOpts);
+    return (sentTx.address ? sentTx : await sentTx.deployed()) as T;
   }
 
   /**

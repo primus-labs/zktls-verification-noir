@@ -62,11 +62,11 @@ export function parseAttestationData(
     throw new Error("grumpkinBatchSize is required for commitment-based parsing. Use parseHashingData for hash-based attestations.");
   }
   
-  if (!attDataParsed["#grumpkin"]) {
-    throw new Error("#grumpkin field not found in attestation data");
+  if (!attDataParsed["grumpkin-commitment"]) {
+    throw new Error("grumpkin-commitment field not found in attestation data");
   }
-  
-  const verificationArray = JSON.parse(attDataParsed["#grumpkin"]);
+
+  const verificationArray = JSON.parse(attDataParsed["grumpkin-commitment"]);
 
   // Step 5: Parse commitments and randoms
   const commitments = parseCommitments(verificationArray);
@@ -78,25 +78,11 @@ export function parseAttestationData(
     config.grumpkinBatchSize
   );
 
-  // Step 7: Extract reveal string for msgs array
-  if (!attDataParsed["#reveal_id"]) {
-    throw new Error("#reveal_id field not found in attestation data");
+  // Step 7: Extract reveal string for msgs array from private_data content.
+  if (!privateData.content) {
+    throw new Error("private_data.content is missing");
   }
-  
-  let revealJsonRaw = attDataParsed["#reveal_id"];
-  
-  // #reveal_id is a JSON string, parse it
-  if (typeof revealJsonRaw === "string") {
-    try {
-      revealJsonRaw = JSON.parse(revealJsonRaw);
-    } catch (e) {
-      throw new Error(`Failed to parse #reveal_id: ${e}`);
-    }
-  }
-  
-  // Convert the parsed object back to JSON string for msgs
-  const revealStr = JSON.stringify(revealJsonRaw);
-  const msgs = Array.from(Buffer.from(revealStr, "utf8"));
+  const msgs = Array.from(Buffer.from(privateData.content, "utf8"));
 
   // Generate random ID
   const id = Math.floor(Math.random() * 9999999999);
