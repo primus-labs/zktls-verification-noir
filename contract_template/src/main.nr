@@ -17,7 +17,7 @@ use dep::aztec::macros::aztec;
   */
 #[aztec]
 pub contract BusinessProgram {
-    use att_verifier_lib::{verify_attestation_comm, verify_attestation_hashing};
+    use att_verifier_lib::{verify_attestation_comm_1, verify_attestation_comm_2, verify_attestation_comm_3, verify_attestation_hashing};
     use aztec::macros::{events::event, functions::{external, initializer}};
     use aztec::macros::storage::storage;
     use aztec::protocol::address::AztecAddress;
@@ -184,12 +184,12 @@ pub contract BusinessProgram {
         signature: [u8; 64],
         request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
         allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
-        coms_1: BoundedVec<EmbeddedCurvePoint, MAX_COMMS_1>,
-        rnds_1: BoundedVec<Field, MAX_COMMS_1>,
-        msgs_chunks_1: BoundedVec<Field, MAX_COMMS_1>,
-        coms_2: BoundedVec<EmbeddedCurvePoint, MAX_COMMS_2>,
-        rnds_2: BoundedVec<Field, MAX_COMMS_2>,
-        msgs_chunks_2: BoundedVec<Field, MAX_COMMS_2>,
+        coms_1: BoundedVec<EmbeddedCurvePoint, MAX_COMMS>,
+        rnds_1: BoundedVec<Field, MAX_COMMS>,
+        msgs_chunks_1: BoundedVec<Field, MAX_COMMS>,
+        coms_2: BoundedVec<EmbeddedCurvePoint, MAX_COMMS>,
+        rnds_2: BoundedVec<Field, MAX_COMMS>,
+        msgs_chunks_2: BoundedVec<Field, MAX_COMMS>,
         H: EmbeddedCurvePoint,
         id: Field,
     ) -> bool {
@@ -200,9 +200,12 @@ pub contract BusinessProgram {
             signature,
             request_urls,
             allowed_urls,
-            coms,
-            rnds,
-            msgs_chunks,
+            coms_1,
+            rnds_1,
+            msgs_chunks_1,
+            coms_2,
+            rnds_2,
+            msgs_chunks_2,
             H,
         );
 
@@ -232,15 +235,15 @@ pub contract BusinessProgram {
         signature: [u8; 64],
         request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
         allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
-        coms_1: BoundedVec<EmbeddedCurvePoint, MAX_COMMS_1>,
-        rnds_1: BoundedVec<Field, MAX_COMMS_1>,
-        msgs_chunks_1: BoundedVec<Field, MAX_COMMS_1>,
-        coms_2: BoundedVec<EmbeddedCurvePoint, MAX_COMMS_2>,
-        rnds_2: BoundedVec<Field, MAX_COMMS_2>,
-        msgs_chunks_2: BoundedVec<Field, MAX_COMMS_2>,
-        coms_3: BoundedVec<EmbeddedCurvePoint, MAX_COMMS_3>,
-        rnds_3: BoundedVec<Field, MAX_COMMS_3>,
-        msgs_chunks_3: BoundedVec<Field, MAX_COMMS_3>,
+        coms_1: BoundedVec<EmbeddedCurvePoint, MAX_COMMS>,
+        rnds_1: BoundedVec<Field, MAX_COMMS>,
+        msgs_chunks_1: BoundedVec<Field, MAX_COMMS>,
+        coms_2: BoundedVec<EmbeddedCurvePoint, MAX_COMMS>,
+        rnds_2: BoundedVec<Field, MAX_COMMS>,
+        msgs_chunks_2: BoundedVec<Field, MAX_COMMS>,
+        coms_3: BoundedVec<EmbeddedCurvePoint, MAX_COMMS>,
+        rnds_3: BoundedVec<Field, MAX_COMMS>,
+        msgs_chunks_3: BoundedVec<Field, MAX_COMMS>,
         H: EmbeddedCurvePoint,
         id: Field,
     ) -> bool {
@@ -251,9 +254,15 @@ pub contract BusinessProgram {
             signature,
             request_urls,
             allowed_urls,
-            coms,
-            rnds,
-            msgs_chunks,
+            coms_1,
+            rnds_1,
+            msgs_chunks_1,
+            coms_2,
+            rnds_2,
+            msgs_chunks_2,
+            coms_3,
+            rnds_3,
+            msgs_chunks_3,
             H,
         );
 
