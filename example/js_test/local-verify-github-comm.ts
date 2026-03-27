@@ -8,9 +8,9 @@
  */
 
 import fs from "fs";
-import { parseAttestationData, hashUrlsWithPoseidon2 } from "att-verifier-parsing";
+import { parseCommitmentData, hashUrlsWithPoseidon2 } from "att-verifier-parsing";
 import { EmbeddedWallet } from "@aztec/wallets/embedded";
-import { BusinessProgramContract } from "./bindings/BusinessProgram_github.js";
+import { GithubVerifierContract } from "./bindings/GithubVerifier.js";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { getPublicEvents } from "@aztec/aztec.js/events";
 import { Barretenberg } from "@aztec/bb.js";
@@ -24,12 +24,12 @@ const TX_TIMEOUT = 120000;     // 2 min
 
 const MAX_RESPONSE_NUM = 2;
 const ALLOWED_URL = ["https://api.github.com", "https://www.okx.com", "https://x.com"];
-const ATT_PATH = "testdata/github-contributors-commitment-attestation.json";
+const ATT_PATH = "testdata/github-contributors-attestation-commitment.json";
 const GRUMPKIN_BATCH_SIZE = 253;
 
 // The contributor to verify from the attestation response
 const GITHUB_USERNAME = "ewynx";
-const CONTRIBUTOR_INDEX = 0;
+const GITHUB_ID = "22170967";
 
 const H = {
   x: 19978178333943292355349418156359056918133515370613875064303296301489725624535n,
@@ -65,27 +65,36 @@ const { node, wallet } = await setupWallet();
 const account = await getTestAccount(wallet);
 
 const rawData = JSON.parse(fs.readFileSync(ATT_PATH, "utf-8"));
-const parsed = parseAttestationData(rawData, {
+const parsed = parseCommitmentData(rawData, {
   maxResponseNum: MAX_RESPONSE_NUM,
   allowedUrls: ALLOWED_URL,
   grumpkinBatchSize: GRUMPKIN_BATCH_SIZE,
 });
-console.log(`Commitments in test data: ${parsed.commitments.length}`);
+console.log(`Commitments in test data: ${parsed.groups.length}`);
 
 const hashedUrls = await hashUrlsWithPoseidon2(bb, parsed.allowedUrls);
 
 const githubUsernameBytes = Array.from(new TextEncoder().encode(GITHUB_USERNAME));
+const githubId = Array.from(new TextEncoder().encode(GITHUB_ID));
 
 console.log("\nDeploying BusinessProgram contract...");
-const contract = await BusinessProgramContract.deploy(wallet, account.address, hashedUrls, H)
+const contract = await GithubVerifierContract.deploy(wallet, account.address, hashedUrls, H)
   .send({ from: account.address, wait: { timeout: DEPLOY_TIMEOUT } });
 console.log("Contract deployed at:", contract.address.toString());
 
 console.log("\nProfiling verify_comm...");
+  // SchnorrAccount:entrypoint: 54,352 gates
+  // private_kernel_init: 46,811 gates
+  // BusinessProgram:verify_comm: 277,863 gates
+  // private_kernel_inner: 101,237 gates
+  // private_kernel_reset: 112,535 gates
+  // private_kernel_tail: 88,987 gates
+  // hiding_kernel: 38,069 gates
 const profile = await contract.methods.verify_comm(
   parsed.publicKeyX, parsed.publicKeyY, parsed.hash, parsed.signature,
-  parsed.requestUrls, parsed.allowedUrls, parsed.commitments, parsed.randomScalars,
-  parsed.msgsChunks, parsed.msgs, H, parsed.id, githubUsernameBytes, CONTRIBUTOR_INDEX,
+  parsed.requestUrls, parsed.allowedUrls, parsed.groups[0].commitments, parsed.groups[0].randomScalars, parsed.groups[0].msgsChunks, parsed.groups[0].msgs, 
+  parsed.groups[1].commitments, parsed.groups[1].randomScalars, parsed.groups[1].msgsChunks, parsed.groups[1].msgs,
+  H, parsed.id, githubUsernameBytes, githubId
 ).profile({ from: account.address, profileMode: "full", skipProofGeneration: true });
 
 for (const s of profile.executionSteps) {
@@ -96,8 +105,9 @@ console.log("\nExecuting verify_comm on-chain...");
 const start = Date.now();
 const result = await contract.methods.verify_comm(
   parsed.publicKeyX, parsed.publicKeyY, parsed.hash, parsed.signature,
-  parsed.requestUrls, parsed.allowedUrls, parsed.commitments, parsed.randomScalars,
-  parsed.msgsChunks, parsed.msgs, H, parsed.id, githubUsernameBytes, CONTRIBUTOR_INDEX,
+  parsed.requestUrls, parsed.allowedUrls, parsed.groups[0].commitments, parsed.groups[0].randomScalars, parsed.groups[0].msgsChunks, parsed.groups[0].msgs, 
+  parsed.groups[1].commitments, parsed.groups[1].randomScalars, parsed.groups[1].msgsChunks, parsed.groups[1].msgs,
+  H, parsed.id, githubUsernameBytes, githubId
 ).send({ from: account.address, wait: { timeout: TX_TIMEOUT } });
 
 console.log(`\nTransaction confirmed!`);
@@ -105,7 +115,7 @@ console.log(`   Status:       ${result.status}`);
 console.log(`   Block number: ${result.blockNumber}`);
 console.log(`   Duration:     ${((Date.now() - start) / 1000).toFixed(1)}s`);
 
-const events = await getPublicEvents<{ sender: unknown, contract_address: unknown, id: bigint }>(node, BusinessProgramContract.events.SuccessEvent, {
+const events = await getPublicEvents<{ sender: unknown, contract_address: unknown, id: bigint }>(node, GithubVerifierContract.events.SuccessEvent, {
   txHash: result.txHash,
   contractAddress: contract.address,
 });

@@ -1,5 +1,5 @@
 [package]
-name = "github_example"
+name = "okx_example"
 type = "contract"
 authors = [""]
 

@@ -11,7 +11,7 @@
 import fs from "fs";
 import { parseHashingData, hashUrlsWithPoseidon2 } from "att-verifier-parsing";
 import { EmbeddedWallet } from "@aztec/wallets/embedded";
-import { GithubVerifierContract } from "./bindings/GithubVerifier.js";
+import { OKXVerifierContract } from "./bindings/OKXVerifier.js";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { getPublicEvents } from "@aztec/aztec.js/events";
 import { Barretenberg } from "@aztec/bb.js";
@@ -25,7 +25,7 @@ const TX_TIMEOUT = 120000;     // 2 min
 
 const MAX_RESPONSE_NUM = 2;
 const ALLOWED_URL = ["https://api.github.com", "https://www.okx.com", "https://x.com"];
-const ATT_PATH = "testdata/github-contributors-attestation-hash.json";
+const ATT_PATH = "testdata/okx-attestation-hash.json";
 const GRUMPKIN_BATCH_SIZE = 253;
 
 // The contributor to verify from the attestation response
@@ -57,7 +57,7 @@ async function getTestAccount(wallet: EmbeddedWallet) {
 // Main
 
 console.log("=".repeat(70));
-console.log("local verify_hash — GitHub contributors (HASH_COMPARISON)");
+console.log("local verify_hash — OKX (HASH_COMPARISON)");
 console.log("=".repeat(70));
 console.log(`Connecting to local network at ${LOCAL_NODE_URL}`);
 console.log("Make sure 'aztec start --local-network' is running!\n");
@@ -79,14 +79,14 @@ const githubUsernameBytes = Array.from(new TextEncoder().encode(GITHUB_USERNAME)
 const githubId = Array.from(new TextEncoder().encode(GITHUB_ID));
 
 console.log("\nDeploying BusinessProgram contract...");
-const contract = await GithubVerifierContract.deploy(wallet, account.address, hashedUrls, H)
+const contract = await OKXVerifierContract.deploy(wallet, account.address, hashedUrls, H)
   .send({ from: account.address, wait: { timeout: DEPLOY_TIMEOUT } });
 console.log("Contract deployed at:", contract.address.toString());
 
 console.log("\nProfiling verify_hash...");
   // SchnorrAccount:entrypoint: 54,352 gates
   // private_kernel_init: 46,811 gates
-  // BusinessProgram:verify_hash: 290,848 gates
+  // OKXVerifier:verify_hash: 274,464 gates
   // private_kernel_inner: 101,237 gates
   // private_kernel_reset: 112,535 gates
   // private_kernel_tail: 88,987 gates
@@ -94,7 +94,7 @@ console.log("\nProfiling verify_hash...");
 const profile = await contract.methods.verify_hash(
   parsed.publicKeyX, parsed.publicKeyY, parsed.hash, parsed.signature,
   parsed.requestUrls, parsed.allowedUrls, parsed.dataHashes, parsed.plainJsonResponses,
-  parsed.id, githubUsernameBytes, githubId,
+  parsed.id
 ).profile({ from: account.address, profileMode: "full", skipProofGeneration: true });
 
 for (const s of profile.executionSteps) {
@@ -106,7 +106,7 @@ const start = Date.now();
 const result = await contract.methods.verify_hash(
   parsed.publicKeyX, parsed.publicKeyY, parsed.hash, parsed.signature,
   parsed.requestUrls, parsed.allowedUrls, parsed.dataHashes, parsed.plainJsonResponses,
-  parsed.id, githubUsernameBytes, githubId,
+  parsed.id
 ).send({ from: account.address, wait: { timeout: TX_TIMEOUT } });
 
 console.log(`\nTransaction confirmed!`);
@@ -114,7 +114,7 @@ console.log(`   Status:       ${result.status}`);
 console.log(`   Block number: ${result.blockNumber}`);
 console.log(`   Duration:     ${((Date.now() - start) / 1000).toFixed(1)}s`);
 
-const events = await getPublicEvents<{ sender: unknown, contract_address: unknown, id: bigint }>(node, GithubVerifierContract.events.SuccessEvent, {
+const events = await getPublicEvents<{ sender: unknown, contract_address: unknown, id: bigint }>(node, OKXVerifierContract.events.SuccessEvent, {
   txHash: result.txHash,
   contractAddress: contract.address,
 });

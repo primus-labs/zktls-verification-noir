@@ -9,8 +9,8 @@ import { EthAddress } from '@aztec/aztec.js/addresses';
 import { Fr, Point } from '@aztec/aztec.js/fields';
 import { type PublicKey, PublicKeys } from '@aztec/aztec.js/keys';
 import type { Wallet } from '@aztec/aztec.js/wallet';
-import BusinessProgramContractArtifactJson from '../../target/real_business_program-BusinessProgram.json' with { type: 'json' };
-export const BusinessProgramContractArtifact = loadContractArtifact(BusinessProgramContractArtifactJson as NoirCompiledContract);
+import GithubVerifierContractArtifactJson from '../../target/github_example-GithubVerifier.json' with { type: 'json' };
+export const GithubVerifierContractArtifact = loadContractArtifact(GithubVerifierContractArtifactJson as NoirCompiledContract);
 
 
       export type SuccessEvent = {
@@ -21,15 +21,15 @@ id: FieldLike
     
 
 /**
- * Type-safe interface for contract BusinessProgram;
+ * Type-safe interface for contract GithubVerifier;
  */
-export class BusinessProgramContract extends ContractBase {
+export class GithubVerifierContract extends ContractBase {
   
   private constructor(
     address: AztecAddress,
     wallet: Wallet,
   ) {
-    super(address, BusinessProgramContractArtifact, wallet);
+    super(address, GithubVerifierContractArtifact, wallet);
   }
   
 
@@ -43,8 +43,8 @@ export class BusinessProgramContract extends ContractBase {
   public static at(
     address: AztecAddress,
     wallet: Wallet,
-  ): BusinessProgramContract {
-    return Contract.at(address, BusinessProgramContract.artifact, wallet) as BusinessProgramContract;
+  ): GithubVerifierContract {
+    return Contract.at(address, GithubVerifierContract.artifact, wallet) as GithubVerifierContract;
   }
 
   
@@ -52,28 +52,28 @@ export class BusinessProgramContract extends ContractBase {
    * Creates a tx to deploy a new instance of this contract.
    */
   public static deploy(wallet: Wallet, admin: AztecAddressLike, allowed_url_hashes: FieldLike[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }) {
-    return new DeployMethod<BusinessProgramContract>(PublicKeys.default(), wallet, BusinessProgramContractArtifact, (instance, wallet) => BusinessProgramContract.at(instance.address, wallet), Array.from(arguments).slice(1));
+    return new DeployMethod<GithubVerifierContract>(PublicKeys.default(), wallet, GithubVerifierContractArtifact, (instance, wallet) => GithubVerifierContract.at(instance.address, wallet), Array.from(arguments).slice(1));
   }
 
   /**
    * Creates a tx to deploy a new instance of this contract using the specified public keys hash to derive the address.
    */
   public static deployWithPublicKeys(publicKeys: PublicKeys, wallet: Wallet, admin: AztecAddressLike, allowed_url_hashes: FieldLike[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }) {
-    return new DeployMethod<BusinessProgramContract>(publicKeys, wallet, BusinessProgramContractArtifact, (instance, wallet) => BusinessProgramContract.at(instance.address, wallet), Array.from(arguments).slice(2));
+    return new DeployMethod<GithubVerifierContract>(publicKeys, wallet, GithubVerifierContractArtifact, (instance, wallet) => GithubVerifierContract.at(instance.address, wallet), Array.from(arguments).slice(2));
   }
 
   /**
    * Creates a tx to deploy a new instance of this contract using the specified constructor method.
    */
-  public static deployWithOpts<M extends keyof BusinessProgramContract['methods']>(
+  public static deployWithOpts<M extends keyof GithubVerifierContract['methods']>(
     opts: { publicKeys?: PublicKeys; method?: M; wallet: Wallet },
-    ...args: Parameters<BusinessProgramContract['methods'][M]>
+    ...args: Parameters<GithubVerifierContract['methods'][M]>
   ) {
-    return new DeployMethod<BusinessProgramContract>(
+    return new DeployMethod<GithubVerifierContract>(
       opts.publicKeys ?? PublicKeys.default(),
       opts.wallet,
-      BusinessProgramContractArtifact,
-      (instance, wallet) => BusinessProgramContract.at(instance.address, wallet),
+      GithubVerifierContractArtifact,
+      (instance, wallet) => GithubVerifierContract.at(instance.address, wallet),
       Array.from(arguments).slice(1),
       opts.method ?? 'constructor',
     );
@@ -85,14 +85,14 @@ export class BusinessProgramContract extends ContractBase {
    * Returns this contract's artifact.
    */
   public static get artifact(): ContractArtifact {
-    return BusinessProgramContractArtifact;
+    return GithubVerifierContractArtifact;
   }
 
   /**
    * Returns this contract's artifact with public bytecode.
    */
   public static get artifactForPublic(): ContractArtifact {
-    return loadContractArtifactForPublic(BusinessProgramContractArtifactJson as NoirCompiledContract);
+    return loadContractArtifactForPublic(GithubVerifierContractArtifactJson as NoirCompiledContract);
   }
   
 
@@ -138,11 +138,11 @@ H: {
     /** update_allowed_url_hashes(allowed_url_hashes: array) */
     update_allowed_url_hashes: ((allowed_url_hashes: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** verify_comm(public_key_x: array, public_key_y: array, hash: array, signature: array, request_urls: array, allowed_urls: array, coms: struct, rnds: struct, msgs_chunks: struct, msgs: struct, H: struct, id: field) */
-    verify_comm: ((public_key_x: (bigint | number)[], public_key_y: (bigint | number)[], hash: (bigint | number)[], signature: (bigint | number)[], request_urls: (bigint | number)[][], allowed_urls: (bigint | number)[][], coms: { x: FieldLike, y: FieldLike, is_infinite: boolean }[], rnds: FieldLike[], msgs_chunks: FieldLike[], msgs: (bigint | number)[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }, id: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** verify_comm(public_key_x: array, public_key_y: array, hash: array, signature: array, request_urls: array, allowed_urls: array, coms_1: struct, rnds_1: struct, msgs_chunks_1: struct, msgs_1: struct, coms_2: struct, rnds_2: struct, msgs_chunks_2: struct, msgs_2: struct, H: struct, id: field, github_username: struct, github_id: struct) */
+    verify_comm: ((public_key_x: (bigint | number)[], public_key_y: (bigint | number)[], hash: (bigint | number)[], signature: (bigint | number)[], request_urls: (bigint | number)[][], allowed_urls: (bigint | number)[][], coms_1: { x: FieldLike, y: FieldLike, is_infinite: boolean }[], rnds_1: FieldLike[], msgs_chunks_1: FieldLike[], msgs_1: (bigint | number)[], coms_2: { x: FieldLike, y: FieldLike, is_infinite: boolean }[], rnds_2: FieldLike[], msgs_chunks_2: FieldLike[], msgs_2: (bigint | number)[], H: { x: FieldLike, y: FieldLike, is_infinite: boolean }, id: FieldLike, github_username: (bigint | number)[], github_id: (bigint | number)[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** verify_hash(public_key_x: array, public_key_y: array, hash: array, signature: array, request_urls: array, allowed_urls: array, data_hashes: array, plain_json_response_contents: array, id: field) */
-    verify_hash: ((public_key_x: (bigint | number)[], public_key_y: (bigint | number)[], hash: (bigint | number)[], signature: (bigint | number)[], request_urls: (bigint | number)[][], allowed_urls: (bigint | number)[][], data_hashes: (bigint | number)[][], plain_json_response_contents: (bigint | number)[][], id: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** verify_hash(public_key_x: array, public_key_y: array, hash: array, signature: array, request_urls: array, allowed_urls: array, data_hashes: array, contents: array, id: field, github_username: struct, github_id: struct) */
+    verify_hash: ((public_key_x: (bigint | number)[], public_key_y: (bigint | number)[], hash: (bigint | number)[], signature: (bigint | number)[], request_urls: (bigint | number)[][], allowed_urls: (bigint | number)[][], data_hashes: (bigint | number)[][], contents: (bigint | number)[][], id: FieldLike, github_username: (bigint | number)[], github_id: (bigint | number)[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
   };
 
   
@@ -189,7 +189,7 @@ H: {
             }
         }
     ],
-    "path": "BusinessProgram::SuccessEvent"
+    "path": "GithubVerifier::SuccessEvent"
 },
         eventSelector: EventSelector.fromString("0x95b36ac7"),
         fieldNames: ["sender","contract_address","id"],

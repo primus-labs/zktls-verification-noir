@@ -1,8 +1,14 @@
 use aztec::macros::aztec;
+
+/**
+  * OKX trading pair liveness check.
+  *
+  * The attestation is expected to have exactly one responseResolve:
+  *   responseResolves[0] contains the "state" of the BTC USD trading pair
+  */
 #[aztec]
-pub contract BusinessProgram {
-    use ::json_parser::{JSON2055, JSON2kb};
-    use att_verifier_lib::{verify_attestation_comm, verify_attestation_hashing};
+pub contract OKXVerifier {
+    use att_verifier_lib::{verify_attestation_comm_1, verify_attestation_hashing};
     use aztec::macros::{events::event, functions::{external, initializer}};
     use aztec::macros::storage::storage;
     use aztec::protocol::address::AztecAddress;
@@ -10,9 +16,9 @@ pub contract BusinessProgram {
     use std::embedded_curve_ops::EmbeddedCurvePoint;
 
     global MAX_URL_LEN: u32 = 1024;
-    global MAX_MSGS_LEN: u32 = 2054;
-    global MAX_CONTENT_LEN: u32 = 1000;
-    global MAX_COMMS: u32 = 65;
+    global MAX_MSGS_LEN: u32 = 10;
+    global MAX_CONTENT_LEN: u32 = 10;
+    global MAX_COMMS: u32 = 1;
 
     #[event]
     struct SuccessEvent {
@@ -23,17 +29,22 @@ pub contract BusinessProgram {
 
     #[storage]
     struct Storage<Context> {
+        // Admin address that can update allowed_url_hashes
         admin: PublicMutable<AztecAddress, Context>,
+        // Hashes of allowed URLs (storing complete URLs was too large for contract storage)
         allowed_url_hashes: PublicMutable<[Field; 3], Context>,
+        // Point H used in commitment verification
         H: PublicImmutable<EmbeddedCurvePoint, Context>,
     }
 
+    // Set admin that is allowed to adjust allowed_url_hashes
     #[external("public")]
     fn set_admin(new_admin: AztecAddress) {
         assert(self.storage.admin.read().eq(self.msg_sender()), "caller is not admin");
         self.storage.admin.write(new_admin);
     }
 
+    // Contract constructor
     #[initializer]
     #[external("public")]
     fn constructor(admin: AztecAddress, allowed_url_hashes: [Field; 3], H: EmbeddedCurvePoint) {
@@ -43,13 +54,17 @@ pub contract BusinessProgram {
         self.storage.H.initialize(H);
     }
 
-    // TODO - allow update single url with index?
+    // Update allowed_url_hashes (only callable by admin)
     #[external("public")]
     fn update_allowed_url_hashes(allowed_url_hashes: [Field; 3]) {
         assert(self.storage.admin.read().eq(self.msg_sender()), "caller is not admin");
         self.storage.allowed_url_hashes.write(allowed_url_hashes);
     }
 
+    // Check:
+    // - allowed_url_matches_hashes are in storage
+    // - H matches stored H
+    // then emit (public) Success event
     #[external("public")]
     fn check_values_emit_event(
         sender: AztecAddress,
@@ -78,6 +93,9 @@ pub contract BusinessProgram {
         self.emit(SuccessEvent { sender, contract_address, id });
     }
 
+    // Check:
+    // - allowed_url_matches_hashes are in storage
+    // then emit (public) Success event
     #[external("public")]
     fn check_urls_emit_event(
         sender: AztecAddress,
@@ -101,9 +119,8 @@ pub contract BusinessProgram {
         self.emit(SuccessEvent { sender, contract_address, id });
     }
 
-    // Check H equals the publicly known value
-    // do asserts on msgs
-    // Opcode count: 208423, Total gates by opcodes: 696795, Circuit size: 711763
+    // Verify commitment-based attestation and emit event upon success.
+    // After verifying the attestation, checks that the received status equals "live"
     #[external("private")]
     fn verify_comm(
         public_key_x: [u8; 32],
@@ -112,30 +129,31 @@ pub contract BusinessProgram {
         signature: [u8; 64],
         request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
         allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
-        coms: BoundedVec<EmbeddedCurvePoint, MAX_COMMS>,
-        rnds: BoundedVec<Field, MAX_COMMS>,
-        msgs_chunks: BoundedVec<Field, MAX_COMMS>,
-        msgs: BoundedVec<u8, MAX_MSGS_LEN>,
-        H: EmbeddedCurvePoint, // G is fixed, H is fixed per business case
-        id: Field,
+        coms_1: BoundedVec<EmbeddedCurvePoint, MAX_COMMS>,
+        rnds_1: BoundedVec<Field, MAX_COMMS>,
+        msgs_chunks_1: BoundedVec<Field, MAX_COMMS>,
+        msgs_1: BoundedVec<u8, MAX_MSGS_LEN>,
+        H: EmbeddedCurvePoint,
+        id: Field
     ) -> bool {
-        let allowed_url_matches_hashes: [Field; 2] = verify_attestation_comm(
+        let allowed_url_matches_hashes: [Field; 2] = verify_attestation_comm_1(
             public_key_x,
             public_key_y,
             hash,
             signature,
             request_urls,
             allowed_urls,
-            coms,
-            rnds,
-            msgs_chunks,
+            coms_1,
+            rnds_1,
+            msgs_chunks_1,
             H,
         );
-        // Check values
-        // TODO what assert to do here?
-        let _numbers_as_strings = get_values(msgs);
 
-        BusinessProgram::at(self.address)
+        let live: BoundedVec<u8, MAX_MSGS_LEN> = BoundedVec::from_array("live".as_bytes());
+        // Verify the status is "live"
+        assert(msgs_1.storage() == live.storage());
+
+        OKXVerifier::at(self.address)
             .check_values_emit_event(
                 self.msg_sender(),
                 self.address,
@@ -148,7 +166,8 @@ pub contract BusinessProgram {
         true
     }
 
-    // Opcode count: 253113, Total gates by opcodes: 778309, Circuit size: 794646
+    // Verify hashing-based attestation and emit event upon success.
+    // After verifying the attestation, checks that the received status equals "live"
     #[external("private")]
     fn verify_hash(
         public_key_x: [u8; 32],
@@ -157,9 +176,9 @@ pub contract BusinessProgram {
         signature: [u8; 64],
         request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
         allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
-        data_hashes: [[u8; 32]; 2],
-        plain_json_response_contents: [BoundedVec<u8, MAX_CONTENT_LEN>; 2],
-        id: Field, // id for this attestation
+        data_hashes: [[u8; 32]; 1],
+        contents: [BoundedVec<u8, MAX_CONTENT_LEN>; 1],
+        id: Field
     ) -> bool {
         let allowed_url_matches_hashes: [Field; 2] = verify_attestation_hashing(
             public_key_x,
@@ -169,17 +188,14 @@ pub contract BusinessProgram {
             request_urls,
             allowed_urls,
             data_hashes,
-            plain_json_response_contents,
+            contents,
         );
 
-        for i in 0..2 {
-            // Parse plaintext to JSON and obtain the custom values we want to check
-            let (base_ccy, inst_id_code) = get_values2(plain_json_response_contents[i]);
+        let live: BoundedVec<u8, MAX_MSGS_LEN> = BoundedVec::from_array("live".as_bytes());
+        // Verify the status is "live"
+        assert(contents[0].storage() == live.storage());
 
-            // TODO what to assert about base_ccy and inst_id_code
-        }
-
-        BusinessProgram::at(self.address)
+        OKXVerifier::at(self.address)
             .check_urls_emit_event(
                 self.msg_sender(),
                 self.address,
@@ -190,40 +206,4 @@ pub contract BusinessProgram {
 
         true
     }
-
-    #[contract_library_method]
-    fn get_values(plaintext: BoundedVec<u8, MAX_MSGS_LEN>) -> [BoundedVec<u8, 20>; 6] {
-        let json = JSON2055::parse_bounded_vec_json(plaintext);
-
-        // for attestation_data_grumpkin.json
-        // obtain .data[0], this is an array of 6 decimal numbers, which we'll read out as string
-        let key0: BoundedVec<u8, 4> = BoundedVec::from_array("data".as_bytes());
-        let data0 = json.get_array(key0).unwrap().get_array_from_array(0).unwrap();
-
-        [
-            data0.get_string_from_array(0).unwrap(),
-            data0.get_string_from_array(1).unwrap(),
-            data0.get_string_from_array(2).unwrap(),
-            data0.get_string_from_array(3).unwrap(),
-            data0.get_string_from_array(4).unwrap(),
-            data0.get_string_from_array(5).unwrap(),
-        ]
-    }
-
-    #[contract_library_method]
-    fn get_values2(plaintext: BoundedVec<u8, MAX_CONTENT_LEN>) -> (u64, BoundedVec<u8, 10>) {
-        let json = JSON2kb::parse_bounded_vec_json(plaintext);
-        // for eth_hash.json
-        let key0: BoundedVec<u8, 15> = BoundedVec::from_array("makerCommission".as_bytes());
-        let maker_commission = json.get_number(key0).unwrap();
-
-        let key1: BoundedVec<u8, 15> = BoundedVec::from_array("commissionRates".as_bytes());
-        let commission_rate_obj: JSON2kb = json.get_object(key1).unwrap();
-
-        let key2: BoundedVec<u8, 5> = BoundedVec::from_array("maker".as_bytes());
-        let maker_rate_str: BoundedVec<u8, 10> =
-            commission_rate_obj.get_string_from_path([key2]).unwrap();
-        (maker_commission, maker_rate_str)
-    }
-
 }
