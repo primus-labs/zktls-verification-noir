@@ -16,75 +16,35 @@ import {
 import type {
   AttestationFile,
   ParseConfig,
-  ParsedAttestationData,
+  ParsedCommitmentData,
   ParsedHashingData,
 } from "./types.js";
 
-/**
- * Parses complete attestation file data into format ready for smart contract verification.
- * This is the main entry point for parsing attestation data.
- * 
- * @param attestationData - The attestation file data
- * @param config - Configuration for parsing
- * @returns Parsed attestation data ready for verification
- */
-export function parseAttestationData(
-  attestationData: AttestationFile,
-  config: ParseConfig
-): ParsedAttestationData {
-  const publicData = attestationData.public_data[0];
-  
-  // Handle both array and object structures for private_data
-  const privateData = Array.isArray(attestationData.private_data) 
-    ? attestationData.private_data[0] 
-    : attestationData.private_data;
+interface ParsedCommon {
+  publicKeyX: number[];
+  publicKeyY: number[];
+  hash: number[];
+  signature: number[];
+  requestUrls: number[][];
+  allowedUrls: number[][];
+  attDataParsed: any;
+  id: number;
+}
 
-  // Step 1: Encode and hash the attestation
+function parseCommon(attestationData: AttestationFile, config: ParseConfig): ParsedCommon {
+  const publicData = attestationData.public_data[0];
+
   const packedArr = encodePacked(publicData.attestation);
   const msgHash = keccak_256(new Uint8Array(packedArr));
   const hash = Array.from(msgHash);
 
-  // Step 2: Parse signature and recover public key
   const { sig, compactBytes } = parseSignature(publicData.signature);
   const pubKey = recoverPublicKey(sig, msgHash);
 
-  // Step 3: Parse URLs
-  const requestUrls = parseRequestUrls(
-    publicData.attestation.request,
-    config.maxResponseNum
-  );
+  const requestUrls = parseRequestUrls(publicData.attestation.request, config.maxResponseNum);
   const allowedUrls = parseAllowedUrls(config.allowedUrls);
 
-  // Step 4: Parse attestation data
   const attDataParsed = JSON.parse(publicData.attestation.data);
-  
-  if (!config.grumpkinBatchSize) {
-    throw new Error("grumpkinBatchSize is required for commitment-based parsing. Use parseHashingData for hash-based attestations.");
-  }
-  
-  if (!attDataParsed["grumpkin-commitment"]) {
-    throw new Error("grumpkin-commitment field not found in attestation data");
-  }
-
-  const verificationArray = JSON.parse(attDataParsed["grumpkin-commitment"]);
-
-  // Step 5: Parse commitments and randoms
-  const commitments = parseCommitments(verificationArray);
-  const randomScalars = parseRandomScalars(privateData.random!);
-
-  // Step 6: Compute message chunks from content
-  const msgsChunks = computeMsgsChunks(
-    privateData.content!,
-    config.grumpkinBatchSize
-  );
-
-  // Step 7: Extract reveal string for msgs array from private_data content.
-  if (!privateData.content) {
-    throw new Error("private_data.content is missing");
-  }
-  const msgs = Array.from(Buffer.from(privateData.content, "utf8"));
-
-  // Generate random ID
   const id = Math.floor(Math.random() * 9999999999);
 
   return {
@@ -94,72 +54,87 @@ export function parseAttestationData(
     signature: compactBytes,
     requestUrls,
     allowedUrls,
-    commitments,
-    randomScalars,
-    msgsChunks,
-    msgs,
+    attDataParsed,
+    id,
+  };
+}
+
+/**
+ * Parses a commitment-based attestation into format ready for smart contract verification.
+ *
+ * Iterates private_data in order. For each entry keyName gets the commitments (public) 
+ *  and the random scalars & content (private)
+ */
+export function parseCommitmentData(
+  attestationData: AttestationFile,
+  config: ParseConfig
+): ParsedCommitmentData {
+  const { publicKeyX, publicKeyY, hash, signature, requestUrls, allowedUrls, attDataParsed, id } =
+    parseCommon(attestationData, config);
+
+  const groups = attestationData.private_data.map((entry) => {
+    const rawValue = attDataParsed[entry.id];
+    if (rawValue === undefined) {
+      throw new Error(`Key '${entry.id}' not found in attestation data`);
+    }
+
+    const commitmentArray: string[] = JSON.parse(rawValue);
+    const commitments = parseCommitments(commitmentArray);
+
+    if (!entry.random) {
+      throw new Error(`private_data entry '${entry.id}' is missing 'random' field`);
+    }
+    const randomScalars = parseRandomScalars(entry.random);
+
+    if (commitments.length !== randomScalars.length) {
+      throw new Error(
+        `Commitment/random count mismatch for '${entry.id}': ${commitments.length} vs ${randomScalars.length}`
+      );
+    }
+
+    const batchSize = config.grumpkinBatchSize ?? 253;
+
+    return {
+      commitments,
+      randomScalars,
+      msgsChunks: computeMsgsChunks(entry.content, batchSize),
+      msgs: Array.from(Buffer.from(entry.content, "utf8")),
+    };
+  });
+
+  return {
+    publicKeyX,
+    publicKeyY,
+    hash,
+    signature,
+    requestUrls,
+    allowedUrls,
+    groups,
     id,
     attestationData: attDataParsed,
   };
 }
 
 /**
- * Parses attestation data for the hashing verification case.
- * 
- * @param attestationData - The attestation file data
- * @param config - Configuration for parsing
- * @returns Parsed hashing data ready for verification
+ * Parses a hash-based attestation into format ready for smart contract verification.
+ *
+ * Iterates private_data in order. For each keyName gets the hash (public) and the content (private)
  */
 export function parseHashingData(
   attestationData: AttestationFile,
   config: ParseConfig
 ): ParsedHashingData {
-  const publicData = attestationData.public_data[0];
-  
-  // Handle both array and object structures for private_data
-  const privateData = Array.isArray(attestationData.private_data) 
-    ? attestationData.private_data[0] 
-    : attestationData.private_data;
+  const { publicKeyX, publicKeyY, hash, signature, requestUrls, allowedUrls, attDataParsed, id } =
+    parseCommon(attestationData, config);
 
-  // Step 1: Encode and hash the attestation
-  const packedArr = encodePacked(publicData.attestation);
-  const msgHash = keccak_256(new Uint8Array(packedArr));
-  const hash = Array.from(msgHash);
-
-  // Step 2: Parse signature and recover public key
-  const { sig, compactBytes } = parseSignature(publicData.signature);
-  const pubKey = recoverPublicKey(sig, msgHash);
-
-  // Step 3: Parse URLs
-  const requestUrls = parseRequestUrls(
-    publicData.attestation.request,
-    config.maxResponseNum
-  );
-  const allowedUrls = parseAllowedUrls(config.allowedUrls);
-
-  // Step 4: Parse data hashes
-  const dataHashes = parseDataHashes(
-    publicData.attestation.data,
-    config.maxResponseNum
-  );
-
-  // Step 5: Parse plain JSON responses
-  const plainJsonResponses = parsePlainJsonResponses(
-    privateData,
-    config.maxResponseNum
-  );
-
-  // Step 6: Parse attestation data
-  const attDataParsed = JSON.parse(publicData.attestation.data);
-
-  // Generate random ID
-  const id = Math.floor(Math.random() * 9999999999);
+  const dataHashes = parseDataHashes(attestationData.public_data[0].attestation.data, attestationData.private_data);
+  const plainJsonResponses = parsePlainJsonResponses(attestationData.private_data);
 
   return {
-    publicKeyX: pubKey.x,
-    publicKeyY: pubKey.y,
+    publicKeyX,
+    publicKeyY,
     hash,
-    signature: compactBytes,
+    signature,
     requestUrls,
     allowedUrls,
     dataHashes,
@@ -169,7 +144,6 @@ export function parseHashingData(
   };
 }
 
-// Re-export everything from other modules
+// Re-export 
 export * from "./types.js";
 export * from "./utils.js";
-export * from "./commitment.js";

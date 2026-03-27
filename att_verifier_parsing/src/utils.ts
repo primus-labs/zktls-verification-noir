@@ -1,8 +1,9 @@
 import { keccak_256 } from "@noble/hashes/sha3";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import type { Barretenberg } from "@aztec/bb.js";
-import type { AttestationData, AttestationRequest } from "./types.js";
+import type { AttestationData, AttestationRequest, PrivateDataEntry } from "./types.js";
 import { Fr } from "@aztec/aztec.js/fields";
+
 /**
  * Encoding utilities
  */
@@ -60,17 +61,20 @@ export function parseSignature(signatureHex: string) {
   const r = BigInt("0x" + sigBytes.slice(0, 32).toString("hex"));
   const s = BigInt("0x" + sigBytes.slice(32, 64).toString("hex"));
   let v = sigBytes[64];
-  
+
   if (v === 27 || v === 28) v -= 27;
 
   const sig = new secp256k1.Signature(r, s).addRecoveryBit(v);
   return { sig, compactBytes: Array.from(sig.toCompactRawBytes()) };
 }
 
-export function recoverPublicKey(sig: InstanceType<typeof secp256k1.Signature>, messageHash: Uint8Array): { x: number[]; y: number[] } {
+export function recoverPublicKey(
+  sig: InstanceType<typeof secp256k1.Signature>,
+  messageHash: Uint8Array
+): { x: number[]; y: number[] } {
   const pubkey = sig.recoverPublicKey(messageHash);
   const pubBytes = pubkey.toRawBytes(false);
-  
+
   if (pubBytes[0] !== 0x04) {
     throw new Error("Expected uncompressed public key format");
   }
@@ -93,21 +97,19 @@ export function parseRequestUrls(
 
   if (requestArray.length > maxResponseNum) {
     throw new Error(
-      `Request length (${requestArray.length}) exceeds MAX_RESPONSE_NUM (${maxResponseNum})`
+      `Request length (${requestArray.length}) exceeds maxResponseNum (${maxResponseNum})`
     );
   }
 
   const requestUrls: number[][] = [];
-  
   for (const req of requestArray) {
     const urlBytes = Array.from(new TextEncoder().encode(req.url));
     requestUrls.push(urlBytes);
   }
 
-  const diff = maxResponseNum - requestUrls.length;
+  // Pad to maxResponseNum by repeating the last element
   const lastElement = requestUrls[requestUrls.length - 1];
-  
-  for (let i = 0; i < diff; i++) {
+  while (requestUrls.length < maxResponseNum) {
     requestUrls.push([...lastElement]);
   }
 
@@ -147,56 +149,26 @@ export async function hashUrlsWithPoseidon2(
   return hashedUrls;
 }
 
-/**
- * Hashing case utilities
- */
-
-export function parseDataHashes(attestationData: any, maxResponseNum: number): number[][] {
-  const dataHashes: number[][] = [];
-  const attData = JSON.parse(attestationData);
-  
-  for (const [key, value] of Object.entries(attData)) {
-    // Support both uuid- and hash-of-response prefixes
-    if ((key.startsWith("uuid-") || key.startsWith("hash-of-response")) 
-        && typeof value === "string" 
-        && value.length === 64) {
-      const hashBytes = Array.from(Buffer.from(value as string, "hex"));
-      dataHashes.push(hashBytes);
+export function parseDataHashes(
+  attestationDataStr: string,
+  privateData: PrivateDataEntry[]
+): number[][] {
+  const attData = JSON.parse(attestationDataStr);
+  return privateData.map((entry) => {
+    const hexValue = attData[entry.id];
+    if (typeof hexValue !== "string" || hexValue.length !== 64) {
+      throw new Error(
+        `Expected 64-char hex for key '${entry.id}', got: ${JSON.stringify(hexValue)}`
+      );
     }
-  }
-  
-  // Pad by repeating the last element
-  const diff = maxResponseNum - dataHashes.length;
-  const lastElement = dataHashes[dataHashes.length - 1];
-  for (let i = 0; i < diff; i++) {
-    dataHashes.push([...lastElement]);
-  }
-  
-  return dataHashes;
+    return Array.from(Buffer.from(hexValue, "hex"));
+  });
 }
 
-export function parsePlainJsonResponses(privateData: any, maxResponseNum: number): number[][] {
-  const plainJsonResponse: number[][] = [];
-  
-  if (privateData && privateData.plain_json_response && Array.isArray(privateData.plain_json_response)) {
-    for (const entry of privateData.plain_json_response) {
-      if (entry.id && entry.content) {
-        const jsonBytes = Array.from(new TextEncoder().encode(entry.content));
-        plainJsonResponse.push(jsonBytes);
-      }
-    }
-  }
-  
-  // Pad by repeating the last element
-  if (plainJsonResponse.length > 0) {
-    const diff = maxResponseNum - plainJsonResponse.length;
-    const lastElement = plainJsonResponse[plainJsonResponse.length - 1];
-    for (let i = 0; i < diff; i++) {
-      plainJsonResponse.push([...lastElement]);
-    }
-  }
-  
-  return plainJsonResponse;
+export function parsePlainJsonResponses(privateData: PrivateDataEntry[]): number[][] {
+  return privateData.map((entry) =>
+    Array.from(new TextEncoder().encode(entry.content))
+  );
 }
 
 /**

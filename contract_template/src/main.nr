@@ -3,15 +3,17 @@ use dep::aztec::macros::aztec;
 /**
   * An Aztec smart contract template for usage of Primus Noir.
   * This smart contract can verify 2 types of attestations from Primus:
-  * 1) Commitment-based attestations, via the `verify_comm` function.
+  * 1) Commitment-based attestations, via the `verify_comm_*` function.
   * 2) Hashing-based attestations, via the `verify_hash` function.
   *
   * In both cases, upon successful verification of the attestation, an event is emitted.
   *
   * Note that the point H in storage is only needed for commitment-based attestations. 
   * 
-  * TODO: Add the custom checks on the attested data in the verification function(s).
-  * For this, you might want to use the json_parser library. 
+  * TODO: 
+  * - Pick the verification function(s) that align with your usecase
+  * - Adjust global values for your usecase
+  * - Add the custom checks on the attested data in the verification function(s).
   */
 #[aztec]
 pub contract BusinessProgram {
@@ -22,10 +24,11 @@ pub contract BusinessProgram {
     use aztec::state_vars::{PublicImmutable, PublicMutable};
     use std::embedded_curve_ops::EmbeddedCurvePoint;
 
+    // Set these values according to your use-case needs
     global MAX_URL_LEN: u32 = 1024;
-    global MAX_MSGS_LEN: u32 = 2054;
-    global MAX_CONTENT_LEN: u32 = 1000;
-    global MAX_COMMS: u32 = 65;
+    global MAX_MSGS_LEN: u32 = 50;
+    global MAX_CONTENT_LEN: u32 = 50;
+    global MAX_COMMS: u32 = 2;
 
     #[event]
     struct SuccessEvent {
@@ -129,7 +132,7 @@ pub contract BusinessProgram {
     // Verify commitment-based attestation and emit event upon success
     // TODO: insert here your own checks on msgs
     #[external("private")]
-    fn verify_comm(
+    fn verify_comm_1(
         public_key_x: [u8; 32],
         public_key_y: [u8; 32],
         hash: [u8; 32],
@@ -140,10 +143,108 @@ pub contract BusinessProgram {
         rnds: BoundedVec<Field, MAX_COMMS>,
         msgs_chunks: BoundedVec<Field, MAX_COMMS>,
         msgs: BoundedVec<u8, MAX_MSGS_LEN>,
-        H: EmbeddedCurvePoint, // G is fixed, H is fixed per business case
+        H: EmbeddedCurvePoint,
         id: Field,
     ) -> bool {
-        let allowed_url_matches_hashes: [Field; 2] = verify_attestation_comm(
+        let allowed_url_matches_hashes: [Field; 2] = verify_attestation_comm_1(
+            public_key_x,
+            public_key_y,
+            hash,
+            signature,
+            request_urls,
+            allowed_urls,
+            coms,
+            rnds,
+            msgs_chunks,
+            H,
+        );
+
+        // TODO insert checks on msgs
+
+        BusinessProgram::at(self.address)
+            .check_values_emit_event(
+                self.msg_sender(),
+                self.address,
+                id,
+                allowed_url_matches_hashes,
+                H,
+            )
+            .enqueue(self.context);
+
+        true
+    }
+
+    // Verify commitment-based attestation and emit event upon success
+    // TODO: insert here your own checks on msgs
+    #[external("private")]
+    fn verify_comm_2(
+        public_key_x: [u8; 32],
+        public_key_y: [u8; 32],
+        hash: [u8; 32],
+        signature: [u8; 64],
+        request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
+        allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
+        coms_1: BoundedVec<EmbeddedCurvePoint, MAX_COMMS_1>,
+        rnds_1: BoundedVec<Field, MAX_COMMS_1>,
+        msgs_chunks_1: BoundedVec<Field, MAX_COMMS_1>,
+        coms_2: BoundedVec<EmbeddedCurvePoint, MAX_COMMS_2>,
+        rnds_2: BoundedVec<Field, MAX_COMMS_2>,
+        msgs_chunks_2: BoundedVec<Field, MAX_COMMS_2>,
+        H: EmbeddedCurvePoint,
+        id: Field,
+    ) -> bool {
+        let allowed_url_matches_hashes: [Field; 2] = verify_attestation_comm_2(
+            public_key_x,
+            public_key_y,
+            hash,
+            signature,
+            request_urls,
+            allowed_urls,
+            coms,
+            rnds,
+            msgs_chunks,
+            H,
+        );
+
+        // TODO insert checks on msgs
+
+        BusinessProgram::at(self.address)
+            .check_values_emit_event(
+                self.msg_sender(),
+                self.address,
+                id,
+                allowed_url_matches_hashes,
+                H,
+            )
+            .enqueue(self.context);
+
+        true
+    }
+
+
+    // Verify commitment-based attestation and emit event upon success
+    // TODO: insert here your own checks on msgs
+    #[external("private")]
+    fn verify_comm_3(
+        public_key_x: [u8; 32],
+        public_key_y: [u8; 32],
+        hash: [u8; 32],
+        signature: [u8; 64],
+        request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
+        allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
+        coms_1: BoundedVec<EmbeddedCurvePoint, MAX_COMMS_1>,
+        rnds_1: BoundedVec<Field, MAX_COMMS_1>,
+        msgs_chunks_1: BoundedVec<Field, MAX_COMMS_1>,
+        coms_2: BoundedVec<EmbeddedCurvePoint, MAX_COMMS_2>,
+        rnds_2: BoundedVec<Field, MAX_COMMS_2>,
+        msgs_chunks_2: BoundedVec<Field, MAX_COMMS_2>,
+        coms_3: BoundedVec<EmbeddedCurvePoint, MAX_COMMS_3>,
+        rnds_3: BoundedVec<Field, MAX_COMMS_3>,
+        msgs_chunks_3: BoundedVec<Field, MAX_COMMS_3>,
+        H: EmbeddedCurvePoint,
+        id: Field,
+    ) -> bool {
+        let allowed_url_matches_hashes: [Field; 2] = verify_attestation_comm_3(
             public_key_x,
             public_key_y,
             hash,
@@ -183,7 +284,7 @@ pub contract BusinessProgram {
         allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
         data_hashes: [[u8; 32]; 2],
         plain_json_response_contents: [BoundedVec<u8, MAX_CONTENT_LEN>; 2],
-        id: Field, // id for this attestation
+        id: Field,
     ) -> bool {
         let allowed_url_matches_hashes: [Field; 2] = verify_attestation_hashing(
             public_key_x,
