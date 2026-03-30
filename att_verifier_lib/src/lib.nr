@@ -5,26 +5,24 @@ use std::embedded_curve_ops::{
     multi_scalar_mul,
 };
 
-global MAX_URL_LEN: u32 = 1024;
-
 // -----------------------------------------------------------------------------
 // Internal helpers
 // -----------------------------------------------------------------------------
 
 // Verifies the secp256k1 signature and checks that each request URL starts with
 // one of the allowed URLs. Returns the Poseidon2 hash of each matched allowed URL.
-fn verify_sig_and_urls(
+fn verify_sig_and_urls<let MAX_URL_LEN: u32, let NUM_REQUEST_URLS: u32, let NUM_ALLOWED_URLS: u32>(
     public_key_x: [u8; 32],
     public_key_y: [u8; 32],
     hash: [u8; 32],
     signature: [u8; 64],
-    request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
-    allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
-) -> [Field; 2] {
+    request_urls: [BoundedVec<u8, MAX_URL_LEN>; NUM_REQUEST_URLS],
+    allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; NUM_ALLOWED_URLS],
+) -> [Field; NUM_REQUEST_URLS] {
     assert(std::ecdsa_secp256k1::verify_signature(public_key_x, public_key_y, signature, hash));
 
-    let mut allowed_url_matches: [Field; 2] = [0; 2];
-    for i in 0..2 {
+    let mut allowed_url_matches: [Field; NUM_REQUEST_URLS] = [0; NUM_REQUEST_URLS];
+    for i in 0..NUM_REQUEST_URLS {
         // Safety: find the allowed_url index unconstrained, then constrain it.
         let (found, url_index) = unsafe { get_allowed_url_index(request_urls[i], allowed_urls) };
         assert(found == true, "No allowed URL matches the request URL");
@@ -84,72 +82,25 @@ fn verify_commitment_group<let N: u32>(
 // Public API - commitment-based (one variant per number of responseResolves)
 // -----------------------------------------------------------------------------
 
-pub fn verify_attestation_comm_1<let MAX_COMMS: u32>(
+pub fn verify_attestation_comm<let MAX_URL_LEN: u32, let NUM_REQUEST_URLS: u32, let NUM_ALLOWED_URLS: u32, let MAX_COMMS: u32, let NUM_RESPONSE_RESOLVE: u32>(
     public_key_x: [u8; 32],
     public_key_y: [u8; 32],
     hash: [u8; 32],
     signature: [u8; 64],
-    request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
-    allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
-    coms: BoundedVec<EmbeddedCurvePoint, MAX_COMMS>,
-    rnds: BoundedVec<Field, MAX_COMMS>,
-    msgs_chunks: BoundedVec<Field, MAX_COMMS>,
+    request_urls: [BoundedVec<u8, MAX_URL_LEN>; NUM_REQUEST_URLS],
+    allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; NUM_ALLOWED_URLS],
+    coms_per_group: [BoundedVec<EmbeddedCurvePoint, MAX_COMMS>; NUM_RESPONSE_RESOLVE],
+    rnds_per_group: [BoundedVec<Field, MAX_COMMS>; NUM_RESPONSE_RESOLVE],
+    msgs_chunks_per_group: [BoundedVec<Field, MAX_COMMS>; NUM_RESPONSE_RESOLVE],
     H: EmbeddedCurvePoint,
-) -> [Field; 2] {
+) -> [Field; NUM_REQUEST_URLS] {
     let allowed_url_matches = verify_sig_and_urls(
         public_key_x, public_key_y, hash, signature, request_urls, allowed_urls
     );
-    verify_commitment_group(coms, rnds, msgs_chunks, H);
-    allowed_url_matches
-}
-
-pub fn verify_attestation_comm_2<let MAX_COMMS_1: u32, let MAX_COMMS_2: u32>(
-    public_key_x: [u8; 32],
-    public_key_y: [u8; 32],
-    hash: [u8; 32],
-    signature: [u8; 64],
-    request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
-    allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
-    coms_1: BoundedVec<EmbeddedCurvePoint, MAX_COMMS_1>,
-    rnds_1: BoundedVec<Field, MAX_COMMS_1>,
-    msgs_chunks_1: BoundedVec<Field, MAX_COMMS_1>,
-    coms_2: BoundedVec<EmbeddedCurvePoint, MAX_COMMS_2>,
-    rnds_2: BoundedVec<Field, MAX_COMMS_2>,
-    msgs_chunks_2: BoundedVec<Field, MAX_COMMS_2>,
-    H: EmbeddedCurvePoint,
-) -> [Field; 2] {
-    let allowed_url_matches = verify_sig_and_urls(
-        public_key_x, public_key_y, hash, signature, request_urls, allowed_urls
-    );
-    verify_commitment_group(coms_1, rnds_1, msgs_chunks_1, H);
-    verify_commitment_group(coms_2, rnds_2, msgs_chunks_2, H);
-    allowed_url_matches
-}
-
-pub fn verify_attestation_comm_3<let MAX_COMMS_1: u32, let MAX_COMMS_2: u32, let MAX_COMMS_3: u32>(
-    public_key_x: [u8; 32],
-    public_key_y: [u8; 32],
-    hash: [u8; 32],
-    signature: [u8; 64],
-    request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
-    allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
-    coms_1: BoundedVec<EmbeddedCurvePoint, MAX_COMMS_1>,
-    rnds_1: BoundedVec<Field, MAX_COMMS_1>,
-    msgs_chunks_1: BoundedVec<Field, MAX_COMMS_1>,
-    coms_2: BoundedVec<EmbeddedCurvePoint, MAX_COMMS_2>,
-    rnds_2: BoundedVec<Field, MAX_COMMS_2>,
-    msgs_chunks_2: BoundedVec<Field, MAX_COMMS_2>,
-    coms_3: BoundedVec<EmbeddedCurvePoint, MAX_COMMS_3>,
-    rnds_3: BoundedVec<Field, MAX_COMMS_3>,
-    msgs_chunks_3: BoundedVec<Field, MAX_COMMS_3>,
-    H: EmbeddedCurvePoint,
-) -> [Field; 2] {
-    let allowed_url_matches = verify_sig_and_urls(
-        public_key_x, public_key_y, hash, signature, request_urls, allowed_urls
-    );
-    verify_commitment_group(coms_1, rnds_1, msgs_chunks_1, H);
-    verify_commitment_group(coms_2, rnds_2, msgs_chunks_2, H);
-    verify_commitment_group(coms_3, rnds_3, msgs_chunks_3, H);
+    for i in 0..NUM_RESPONSE_RESOLVE {
+        verify_commitment_group(coms_per_group[i], rnds_per_group[i], msgs_chunks_per_group[i], H);
+    }
+    
     allowed_url_matches
 }
 
@@ -158,7 +109,7 @@ pub fn verify_attestation_comm_3<let MAX_COMMS_1: u32, let MAX_COMMS_2: u32, let
 // -----------------------------------------------------------------------------
 
 // N = number of responseResolves. Verifies sha256(contents[i]) == data_hashes[i] for each i.
-pub fn verify_attestation_hashing<let N: u32, let MAX_CONTENT_LEN: u32>(
+pub fn verify_attestation_hashing<let MAX_URL_LEN: u32, let N: u32, let MAX_CONTENT_LEN: u32>(
     public_key_x: [u8; 32],
     public_key_y: [u8; 32],
     hash: [u8; 32],
@@ -182,7 +133,7 @@ pub fn verify_attestation_hashing<let N: u32, let MAX_CONTENT_LEN: u32>(
 // Unconstrained URL helpers
 // -----------------------------------------------------------------------------
 
-unconstrained fn search(
+unconstrained fn search<let MAX_URL_LEN: u32>(
     haystack: BoundedVec<u8, MAX_URL_LEN>,
     needle: BoundedVec<u8, MAX_URL_LEN>,
 ) -> (bool, u32) {
@@ -211,9 +162,9 @@ unconstrained fn search(
     (found, found_index)
 }
 
-unconstrained fn get_allowed_url_index(
+unconstrained fn get_allowed_url_index<let MAX_URL_LEN: u32, let NUM_ALLOWED_URLS: u32>(
     request_url: BoundedVec<u8, MAX_URL_LEN>,
-    allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
+    allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; NUM_ALLOWED_URLS],
 ) -> (bool, u32) {
     let mut found = false;
     let mut index: u32 = 3050913689; // sentinel for "not found"

@@ -65,32 +65,24 @@ export interface ParseConfig {
   grumpkinBatchSize?: number;
 }
 
-/**
- * One commitment group. Corresponds to exactly one responseResolve.keyName.
- * All arrays have the same length (one entry per commitment point).
- */
-export interface CommitmentGroup {
-  commitments: Point[];
-  randomScalars: bigint[];
-  msgsChunks: bigint[];
-  /** UTF-8 bytes of the attested content for this keyName. */
-  msgs: number[];
-}
-
 /** Result of parsing a commitment-based attestation. */
 export interface ParsedCommitmentData {
   publicKeyX: number[];
   publicKeyY: number[];
   hash: number[];
   signature: number[];
+
   requestUrls: number[][];
   allowedUrls: number[][];
+
   /**
-   * One group per responseResolve.keyName (uses the order as in the json)
-   * Pass groups[0] to the first coms/rnds/msgs_chunks argument of
-   * verify_attestation_comm_N, groups[1] to the second, etc.
+   * Indexed by responseResolve order (must match contract expectations)
    */
-  groups: CommitmentGroup[];
+  coms_per_group: Point[][];
+  rnds_per_group: bigint[][];
+  msgs_chunks_per_group: bigint[][];
+  msgs_per_group: number[][];
+
   id: number;
   attestationData: any;
 }

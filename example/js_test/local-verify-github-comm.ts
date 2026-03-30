@@ -11,7 +11,6 @@ import fs from "fs";
 import { parseCommitmentData } from "att-verifier-parsing";
 import { GithubVerifierContract, type SuccessEvent } from "./bindings/GithubVerifier.ts";
 import { Client, ContractHelpers } from "aztec-attestation-sdk";
-import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { getPublicEvents } from "@aztec/aztec.js/events";
 
 // Config
@@ -54,7 +53,7 @@ const parsed = parseCommitmentData(rawData, {
   allowedUrls: ALLOWED_URLS,
   grumpkinBatchSize: GRUMPKIN_BATCH_SIZE,
 });
-console.log(`Commitments in test data: ${parsed.groups.length}`);
+console.log(`Commitments in test data: ${parsed.coms_per_group.length}`);
 
 console.log("\nDeploying GithubVerifier contract...");
 const contract = await ContractHelpers.deployContract(GithubVerifierContract, client, {
@@ -79,8 +78,11 @@ console.log("\nProfiling verify_comm...");
   // hiding_kernel: 38,069 gates
 const profile = await contract.methods.verify_comm(
   parsed.publicKeyX, parsed.publicKeyY, parsed.hash, parsed.signature,
-  parsed.requestUrls, parsed.allowedUrls, parsed.groups[0].commitments, parsed.groups[0].randomScalars, parsed.groups[0].msgsChunks, parsed.groups[0].msgs,
-  parsed.groups[1].commitments, parsed.groups[1].randomScalars, parsed.groups[1].msgsChunks, parsed.groups[1].msgs,
+  parsed.requestUrls, parsed.allowedUrls, 
+  parsed.coms_per_group, 
+  parsed.rnds_per_group, 
+  parsed.msgs_chunks_per_group, 
+  parsed.msgs_per_group, 
   H, parsed.id, githubUsernameBytes, githubId
 ).profile({ from: account.address, profileMode: "full", skipProofGeneration: true });
 
@@ -92,8 +94,11 @@ console.log("\nExecuting verify_comm on-chain...");
 const start = Date.now();
 const { receipt } = await contract.methods.verify_comm(
   parsed.publicKeyX, parsed.publicKeyY, parsed.hash, parsed.signature,
-  parsed.requestUrls, parsed.allowedUrls, parsed.groups[0].commitments, parsed.groups[0].randomScalars, parsed.groups[0].msgsChunks, parsed.groups[0].msgs,
-  parsed.groups[1].commitments, parsed.groups[1].randomScalars, parsed.groups[1].msgsChunks, parsed.groups[1].msgs,
+  parsed.requestUrls, parsed.allowedUrls, 
+  parsed.coms_per_group, 
+  parsed.rnds_per_group, 
+  parsed.msgs_chunks_per_group, 
+  parsed.msgs_per_group, 
   H, parsed.id, githubUsernameBytes, githubId
 ).send({ from: account.address, wait: { timeout: TX_TIMEOUT } });
 
@@ -102,9 +107,8 @@ console.log(`   Status:       ${receipt.status}`);
 console.log(`   Block number: ${receipt.blockNumber}`);
 console.log(`   Duration:     ${((Date.now() - start) / 1000).toFixed(1)}s`);
 
-const node = createAztecNodeClient(LOCAL_NODE_URL);
 const { events } = await getPublicEvents<SuccessEvent>(
-  node, GithubVerifierContract.events.SuccessEvent, { txHash: receipt.txHash, contractAddress: contract.address }
+  client.getNode(), GithubVerifierContract.events.SuccessEvent, { txHash: receipt.txHash, contractAddress: contract.address }
 );
 if (events.length === 0) throw new Error("SuccessEvent was NOT emitted!");
 console.log(`   SuccessEvent:  emitted (id=${events[0].event.id})`);

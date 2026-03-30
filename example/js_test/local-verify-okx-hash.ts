@@ -11,7 +11,6 @@ import fs from "fs";
 import { parseHashingData } from "att-verifier-parsing";
 import { OKXVerifierContract, type SuccessEvent } from "./bindings/OKXVerifier.ts";
 import { Client, ContractHelpers } from "aztec-attestation-sdk";
-import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { getPublicEvents } from "@aztec/aztec.js/events";
 
 // Config
@@ -91,9 +90,8 @@ console.log(`   Status:       ${receipt.status}`);
 console.log(`   Block number: ${receipt.blockNumber}`);
 console.log(`   Duration:     ${((Date.now() - start) / 1000).toFixed(1)}s`);
 
-const node = createAztecNodeClient(LOCAL_NODE_URL);
 const { events } = await getPublicEvents<SuccessEvent>(
-  node, OKXVerifierContract.events.SuccessEvent, { txHash: receipt.txHash, contractAddress: contract.address }
+  client.getNode(), OKXVerifierContract.events.SuccessEvent, { txHash: receipt.txHash, contractAddress: contract.address }
 );
 if (events.length === 0) throw new Error("SuccessEvent was NOT emitted!");
 console.log(`   SuccessEvent:  emitted (id=${events[0].event.id})`);

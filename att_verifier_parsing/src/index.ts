@@ -69,10 +69,25 @@ export function parseCommitmentData(
   attestationData: AttestationFile,
   config: ParseConfig
 ): ParsedCommitmentData {
-  const { publicKeyX, publicKeyY, hash, signature, requestUrls, allowedUrls, attDataParsed, id } =
-    parseCommon(attestationData, config);
+  const {
+    publicKeyX,
+    publicKeyY,
+    hash,
+    signature,
+    requestUrls,
+    allowedUrls,
+    attDataParsed,
+    id,
+  } = parseCommon(attestationData, config);
 
-  const groups = attestationData.private_data.map((entry) => {
+  const batchSize = config.grumpkinBatchSize ?? 253;
+
+  const coms_per_group: any[] = [];
+  const rnds_per_group: any[] = [];
+  const msgs_chunks_per_group: any[] = [];
+  const msgs_per_group: number[][] = [];
+
+  for (const entry of attestationData.private_data) {
     const rawValue = attDataParsed[entry.id];
     if (rawValue === undefined) {
       throw new Error(`Key '${entry.id}' not found in attestation data`);
@@ -84,6 +99,7 @@ export function parseCommitmentData(
     if (!entry.random) {
       throw new Error(`private_data entry '${entry.id}' is missing 'random' field`);
     }
+
     const randomScalars = parseRandomScalars(entry.random);
 
     if (commitments.length !== randomScalars.length) {
@@ -92,15 +108,14 @@ export function parseCommitmentData(
       );
     }
 
-    const batchSize = config.grumpkinBatchSize ?? 253;
+    const msgsChunks = computeMsgsChunks(entry.content, batchSize);
+    const msgs = Array.from(Buffer.from(entry.content, "utf8"));
 
-    return {
-      commitments,
-      randomScalars,
-      msgsChunks: computeMsgsChunks(entry.content, batchSize),
-      msgs: Array.from(Buffer.from(entry.content, "utf8")),
-    };
-  });
+    coms_per_group.push(commitments);
+    rnds_per_group.push(randomScalars);
+    msgs_chunks_per_group.push(msgsChunks);
+    msgs_per_group.push(msgs);
+  }
 
   return {
     publicKeyX,
@@ -109,7 +124,10 @@ export function parseCommitmentData(
     signature,
     requestUrls,
     allowedUrls,
-    groups,
+    coms_per_group,
+    rnds_per_group,
+    msgs_chunks_per_group,
+    msgs_per_group,
     id,
     attestationData: attDataParsed,
   };
