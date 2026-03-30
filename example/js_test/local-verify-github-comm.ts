@@ -9,7 +9,7 @@
 
 import fs from "fs";
 import { parseCommitmentData } from "att-verifier-parsing";
-import { GithubVerifierContract } from "./bindings/GithubVerifier.ts";
+import { GithubVerifierContract, type SuccessEvent } from "./bindings/GithubVerifier.ts";
 import { Client, ContractHelpers } from "aztec-attestation-sdk";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { getPublicEvents } from "@aztec/aztec.js/events";
@@ -103,7 +103,7 @@ console.log(`   Block number: ${receipt.blockNumber}`);
 console.log(`   Duration:     ${((Date.now() - start) / 1000).toFixed(1)}s`);
 
 const node = createAztecNodeClient(LOCAL_NODE_URL);
-const { events } = await getPublicEvents<{ sender: unknown; contract_address: unknown; id: bigint }>(
+const { events } = await getPublicEvents<SuccessEvent>(
   node, GithubVerifierContract.events.SuccessEvent, { txHash: receipt.txHash, contractAddress: contract.address }
 );
 if (events.length === 0) throw new Error("SuccessEvent was NOT emitted!");
