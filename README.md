@@ -96,7 +96,7 @@ In `contract_template` you'll find a full Aztec smart contract that you can use 
 
 ```rust
 // Verify hashing-based attestation and emit event upon success
-// TODO: insert here your own checks on plain_json_response_contents
+// TODO: insert here your own checks on contents
 #[external("private")]
 fn verify_hash(
     public_key_x: [u8; 32],
