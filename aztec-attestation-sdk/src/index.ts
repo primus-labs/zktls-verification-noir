@@ -5,7 +5,6 @@ export { ContractHelpers } from "./contract/ContractHelpers.js";
 export type {
   ContractDeploymentParams,
   EmbeddedCurvePoint,
-  SuccessEvent,
 } from "./contract/ContractHelpers.js";
 
 export {

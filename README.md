@@ -25,16 +25,14 @@ Follow these steps to run the included examples:
 ```
 cd example/github_example
 aztec compile
-aztec codegen -o src/artifacts target
+aztec codegen -o ../js_test/bindings target
 
 cd ../okx_example
 aztec compile
-aztec codegen -o src/artifacts target
+aztec codegen -o ../js_test/bindings target
 ```
 
-2. Move `---.ts` in `src/artifacts/` for both examples to `js_test/bindings/`. 
-
-3. Build libraries
+2. Build libraries
 ```
 # Build parsing library
 cd att_verifier_parsing
@@ -45,7 +43,7 @@ cd ../aztec-attestation-sdk
 yarn && yarn build
 ```
 
-4. Run the different examples:
+3. Run the different examples:
 ```
 aztec start --local-network
 yarn tsx local-verify-github-comm.ts 

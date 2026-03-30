@@ -23,7 +23,6 @@ const TX_TIMEOUT = 120000;     // 2 min
 const MAX_RESPONSE_NUM = 2;
 const ALLOWED_URL = ["https://api.github.com", "https://www.okx.com", "https://x.com"];
 const ATT_PATH = "testdata/okx-attestation-hash.json";
-const GRUMPKIN_BATCH_SIZE = 253;
 
 // This is only needed because the example contract does commitment and has based in one
 const H = {
@@ -49,7 +48,6 @@ const rawData = JSON.parse(fs.readFileSync(ATT_PATH, "utf-8"));
 const parsed = parseHashingData(rawData, {
   maxResponseNum: MAX_RESPONSE_NUM,
   allowedUrls: ALLOWED_URL,
-  grumpkinBatchSize: GRUMPKIN_BATCH_SIZE,
 });
 
 console.log("\nDeploying OKXVerifier contract...");

@@ -292,7 +292,7 @@ pub contract BusinessProgram {
         request_urls: [BoundedVec<u8, MAX_URL_LEN>; 2],
         allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; 3],
         data_hashes: [[u8; 32]; 2],
-        plain_json_response_contents: [BoundedVec<u8, MAX_CONTENT_LEN>; 2],
+        contents: [BoundedVec<u8, MAX_CONTENT_LEN>; 2],
         id: Field,
     ) -> bool {
         let allowed_url_matches_hashes: [Field; 2] = verify_attestation_hashing(
@@ -303,10 +303,10 @@ pub contract BusinessProgram {
             request_urls,
             allowed_urls,
             data_hashes,
-            plain_json_response_contents,
+            contents,
         );
 
-        // TODO insert checks on plain_json_response_contents
+        // TODO insert checks on `contents`
 
         BusinessProgram::at(self.address)
             .check_urls_emit_event(

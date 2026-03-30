@@ -22,15 +22,6 @@ export interface ContractDeploymentParams {
 }
 
 /**
- * Event emitted upon successful attestation verification.
- */
-export interface SuccessEvent {
-  sender: AztecAddress;
-  contract_address: AztecAddress;
-  id: bigint;
-}
-
-/**
  * Helpers for attestation verifier contracts.
  */
 export class ContractHelpers {

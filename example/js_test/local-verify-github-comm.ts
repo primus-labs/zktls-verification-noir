@@ -21,7 +21,7 @@ const DEPLOY_TIMEOUT = 300000; // 5 min
 const TX_TIMEOUT = 120000;     // 2 min
 
 const MAX_RESPONSE_NUM = 2;
-const ALLOWED_URL = ["https://api.github.com", "https://www.okx.com", "https://x.com"];
+const ALLOWED_URLS = ["https://api.github.com", "https://www.okx.com", "https://x.com"];
 const ATT_PATH = "testdata/github-contributors-attestation-commitment.json";
 const GRUMPKIN_BATCH_SIZE = 253;
 
@@ -51,7 +51,7 @@ console.log(`Using test account: ${account.address}`);
 const rawData = JSON.parse(fs.readFileSync(ATT_PATH, "utf-8"));
 const parsed = parseCommitmentData(rawData, {
   maxResponseNum: MAX_RESPONSE_NUM,
-  allowedUrls: ALLOWED_URL,
+  allowedUrls: ALLOWED_URLS,
   grumpkinBatchSize: GRUMPKIN_BATCH_SIZE,
 });
 console.log(`Commitments in test data: ${parsed.groups.length}`);
@@ -59,7 +59,7 @@ console.log(`Commitments in test data: ${parsed.groups.length}`);
 console.log("\nDeploying GithubVerifier contract...");
 const contract = await ContractHelpers.deployContract(GithubVerifierContract, client, {
   admin: account.address,
-  allowedUrls: ALLOWED_URL,
+  allowedUrls: ALLOWED_URLS,
   pointH: H,
   from: account.address,
   timeout: DEPLOY_TIMEOUT,
