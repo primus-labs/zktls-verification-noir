@@ -2,19 +2,17 @@
  * local-verify-github-comm.ts
  *
  * Verify a GitHub contributors commitment-based attestation on a local Aztec network.
- * Uses github-contributors-commitment-attestation.json (GRUMPKIN_COMMITMENT type).
+ * Uses github-contributors-attestation-commitment.json (GRUMPKIN_COMMITMENT type).
  *
  * Prerequisites: `aztec start --local-network` running on port 8080.
  */
 
 import fs from "fs";
-import { parseCommitmentData, hashUrlsWithPoseidon2 } from "att-verifier-parsing";
-import { EmbeddedWallet } from "@aztec/wallets/embedded";
-import { GithubVerifierContract } from "./bindings/GithubVerifier.js";
+import { parseCommitmentData } from "att-verifier-parsing";
+import { GithubVerifierContract } from "./bindings/GithubVerifier.ts";
+import { Client, ContractHelpers } from "aztec-attestation-sdk";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 import { getPublicEvents } from "@aztec/aztec.js/events";
-import { Barretenberg } from "@aztec/bb.js";
-import { getInitialTestAccountsData } from "@aztec/accounts/testing";
 
 // Config
 
@@ -37,21 +35,6 @@ const H = {
   is_infinite: false,
 };
 
-// Helpers
-
-async function setupWallet() {
-  const node = createAztecNodeClient(LOCAL_NODE_URL);
-  const wallet = await EmbeddedWallet.create(node, { ephemeral: true, pxeConfig: { proverEnabled: false } });
-  return { node, wallet };
-}
-
-async function getTestAccount(wallet: EmbeddedWallet) {
-  const [aliceData] = await getInitialTestAccountsData();
-  const account = await wallet.createSchnorrAccount(aliceData.secret, aliceData.salt, aliceData.signingKey);
-  console.log(`Using test account: ${account.address}`);
-  return account;
-}
-
 // Main
 
 console.log("=".repeat(70));
@@ -60,9 +43,10 @@ console.log("=".repeat(70));
 console.log(`Connecting to local network at ${LOCAL_NODE_URL}`);
 console.log("Make sure 'aztec start --local-network' is running!\n");
 
-const bb = await Barretenberg.new();
-const { node, wallet } = await setupWallet();
-const account = await getTestAccount(wallet);
+const client = new Client({ nodeUrl: LOCAL_NODE_URL });
+await client.initialize();
+const account = await client.getAccount(0);
+console.log(`Using test account: ${account.address}`);
 
 const rawData = JSON.parse(fs.readFileSync(ATT_PATH, "utf-8"));
 const parsed = parseCommitmentData(rawData, {
@@ -72,27 +56,30 @@ const parsed = parseCommitmentData(rawData, {
 });
 console.log(`Commitments in test data: ${parsed.groups.length}`);
 
-const hashedUrls = await hashUrlsWithPoseidon2(bb, parsed.allowedUrls);
+console.log("\nDeploying GithubVerifier contract...");
+const contract = await ContractHelpers.deployContract(GithubVerifierContract, client, {
+  admin: account.address,
+  allowedUrls: ALLOWED_URL,
+  pointH: H,
+  from: account.address,
+  timeout: DEPLOY_TIMEOUT,
+});
+console.log("Contract deployed at:", contract.address.toString());
 
 const githubUsernameBytes = Array.from(new TextEncoder().encode(GITHUB_USERNAME));
 const githubId = Array.from(new TextEncoder().encode(GITHUB_ID));
 
-console.log("\nDeploying BusinessProgram contract...");
-const contract = await GithubVerifierContract.deploy(wallet, account.address, hashedUrls, H)
-  .send({ from: account.address, wait: { timeout: DEPLOY_TIMEOUT } });
-console.log("Contract deployed at:", contract.address.toString());
-
 console.log("\nProfiling verify_comm...");
-  // SchnorrAccount:entrypoint: 54,352 gates
+  // SchnorrAccount:entrypoint: 54,502 gates
   // private_kernel_init: 46,811 gates
-  // BusinessProgram:verify_comm: 277,863 gates
+  // GithubVerifier:verify_comm: 279,273 gates
   // private_kernel_inner: 101,237 gates
   // private_kernel_reset: 112,535 gates
-  // private_kernel_tail: 88,987 gates
+  // private_kernel_tail: 88,998 gates
   // hiding_kernel: 38,069 gates
 const profile = await contract.methods.verify_comm(
   parsed.publicKeyX, parsed.publicKeyY, parsed.hash, parsed.signature,
-  parsed.requestUrls, parsed.allowedUrls, parsed.groups[0].commitments, parsed.groups[0].randomScalars, parsed.groups[0].msgsChunks, parsed.groups[0].msgs, 
+  parsed.requestUrls, parsed.allowedUrls, parsed.groups[0].commitments, parsed.groups[0].randomScalars, parsed.groups[0].msgsChunks, parsed.groups[0].msgs,
   parsed.groups[1].commitments, parsed.groups[1].randomScalars, parsed.groups[1].msgsChunks, parsed.groups[1].msgs,
   H, parsed.id, githubUsernameBytes, githubId
 ).profile({ from: account.address, profileMode: "full", skipProofGeneration: true });
@@ -103,24 +90,24 @@ for (const s of profile.executionSteps) {
 
 console.log("\nExecuting verify_comm on-chain...");
 const start = Date.now();
-const result = await contract.methods.verify_comm(
+const { receipt } = await contract.methods.verify_comm(
   parsed.publicKeyX, parsed.publicKeyY, parsed.hash, parsed.signature,
-  parsed.requestUrls, parsed.allowedUrls, parsed.groups[0].commitments, parsed.groups[0].randomScalars, parsed.groups[0].msgsChunks, parsed.groups[0].msgs, 
+  parsed.requestUrls, parsed.allowedUrls, parsed.groups[0].commitments, parsed.groups[0].randomScalars, parsed.groups[0].msgsChunks, parsed.groups[0].msgs,
   parsed.groups[1].commitments, parsed.groups[1].randomScalars, parsed.groups[1].msgsChunks, parsed.groups[1].msgs,
   H, parsed.id, githubUsernameBytes, githubId
 ).send({ from: account.address, wait: { timeout: TX_TIMEOUT } });
 
 console.log(`\nTransaction confirmed!`);
-console.log(`   Status:       ${result.status}`);
-console.log(`   Block number: ${result.blockNumber}`);
+console.log(`   Status:       ${receipt.status}`);
+console.log(`   Block number: ${receipt.blockNumber}`);
 console.log(`   Duration:     ${((Date.now() - start) / 1000).toFixed(1)}s`);
 
-const events = await getPublicEvents<{ sender: unknown, contract_address: unknown, id: bigint }>(node, GithubVerifierContract.events.SuccessEvent, {
-  txHash: result.txHash,
-  contractAddress: contract.address,
-});
+const node = createAztecNodeClient(LOCAL_NODE_URL);
+const { events } = await getPublicEvents<{ sender: unknown; contract_address: unknown; id: bigint }>(
+  node, GithubVerifierContract.events.SuccessEvent, { txHash: receipt.txHash, contractAddress: contract.address }
+);
 if (events.length === 0) throw new Error("SuccessEvent was NOT emitted!");
 console.log(`   SuccessEvent:  emitted (id=${events[0].event.id})`);
 
-await bb.destroy();
+await client.cleanup();
 process.exit(0);

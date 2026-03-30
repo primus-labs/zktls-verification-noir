@@ -12,15 +12,10 @@
   "license": "MIT",
   "dependencies": {
     "att-verifier-parsing": "file:../att_verifier_parsing",
-    "@aztec/accounts": "4.0.0-devnet.2-patch.1",
-    "@aztec/aztec.js": "4.0.0-devnet.2-patch.1",
-    "@aztec/bb.js": "4.0.0-devnet.2-patch.1",
-    "@aztec/constants": "4.0.0-devnet.2-patch.1",
-    "@aztec/kv-store": "4.0.0-devnet.2-patch.1",
-    "@aztec/noir-contracts.js": "4.0.0-devnet.2-patch.1",
-    "@aztec/pxe": "4.0.0-devnet.2-patch.1",
-    "@aztec/stdlib": "4.0.0-devnet.2-patch.1",
-    "@aztec/wallets": "4.0.0-devnet.2-patch.1"
+    "@aztec/accounts": "4.2.0-aztecnr-rc.2",
+    "@aztec/aztec.js": "4.2.0-aztecnr-rc.2",
+    "@aztec/bb.js": "4.2.0-aztecnr-rc.2",
+    "@aztec/wallets": "4.2.0-aztecnr-rc.2"
   },
   "devDependencies": {
     "@types/node": "^24.7.0",

@@ -11,8 +11,8 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@aztec/bb.js": "4.0.0-devnet.2-patch.1",
-    "@aztec/aztec.js": "4.0.0-devnet.2-patch.1",
+    "@aztec/bb.js": "4.2.0-aztecnr-rc.2",
+    "@aztec/aztec.js": "4.2.0-aztecnr-rc.2",
     "@noble/secp256k1": "^3.0.0",
     "@types/node": "^24.7.0",
     "tsx": "^4.20.6",

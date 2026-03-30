@@ -1,5 +1,7 @@
 # Primus Attestations - Aztec Verifier
 
+> Aztec version `4.2.0-aztecnr-rc.2`. 
+
 This repo contains the necessary libraries to create an **Aztec Smart contract that verifies a Primus zkTLS attestation**. There are 2 supported types: commitment based attestation (Grumpkin curve) and hashing based attestation.
 
 In this repo you will find the following components:
@@ -7,30 +9,30 @@ In this repo you will find the following components:
 - `att_verifier_parsing` - The TS library containing the needed parsing logic, which converts a json input into the correct values to call the Aztec smart contract.
 - `aztec-attestation-sdk` - The Aztec Attestaion SDK helps you get started easily on deploying and calling your attestation contracts.
 - `contract_template` - The Aztec smart contract template that can be used to complete a business case. Developers can use this as a starting point for their application.
-- `example` - This contains 2 example smart contracts and a script to run end-to-end tests for these examples. It also benchmarks the examples. 
+- `example` - This contains 2 example smart contracts and a script to run end-to-end tests for these examples. 
 
 In this README there is a [Tutorial](#tutorial-how-to-implement-your-use-case) on how to use the libraries to implement your own use case. 
 
 ## Installation and versioning
 
-This repo uses Aztec Sandbox version `3.0.0-devnet.6-patch.1`. Follow the documentation [here](https://docs.aztec.network/developers/getting_started_on_local_network) to install the sandbox.
+This repo uses Aztec `4.2.0-aztecnr-rc.2` with local network. Follow the documentation [here](https://docs.aztec.network/developers/getting_started_on_local_network) to install the Aztec toolchain and get started on local network. 
 
 ## Run example
 
-Follow these steps to run a local and a devnet example. 
+Follow these steps to run the included examples:
 
-1. Compile real_business_program and small_comm_business_program
+1. Compile github_example and okx_example
 ```
-# inside real_business_program
+cd example/github_example
 aztec compile
 aztec codegen -o src/artifacts target
 
-# inside small_comm_business_program
+cd ../okx_example
 aztec compile
 aztec codegen -o src/artifacts target
 ```
 
-2. Move `---.ts` in `src/artifacts/` and `---.json` in `target` from both `real_business_program` and `small_comm_business_program` to `js_test/bindings/`. (Update the import path in `---.ts` for the jsons)
+2. Move `---.ts` in `src/artifacts/` for both examples to `js_test/bindings/`. 
 
 3. Build libraries
 ```
@@ -43,59 +45,39 @@ cd ../aztec-attestation-sdk
 yarn && yarn build
 ```
 
-4. Run Devnet example
+4. Run the different examples:
 ```
-cd ../example/js_test
-yarn
-
-yarn start:devnet
-```
-
-5. Run local example
-```
-PXE_PROVER_ENABLED=1 aztec start --local-network
-yarn start:local
+aztec start --local-network
+yarn tsx local-verify-github-comm.ts 
+yarn tsx local-verify-github-hash.ts 
+yarn tsx local-verify-okx-comm.ts 
+yarn tsx local-verify-okx-hash.ts 
 ```
 
 ## Benchmarks
 
-These are the benchmarks for 3 testcases; 2 for commitment based attestations with different numbers of commitments (1 versus 65) and one for hash based attestion.
+These are the benchmarks for:
+- Github example, commitment-based
+- Github example, hash-based
+- OKX example, commitment-based
+- OKX example, hash-based
 
-### Timings Local Network
+The circuitsize is for the private function that does the verification. This was obtained by profiling the tx that does verification. For mode information check the Aztec docs on [profileing](https://docs.aztec.network/developers/docs/aztec-nr/framework-description/advanced/how_to_profile_transactions). 
 
-From MacBook Air with Apple M2 (8-core, 3.49 GHz) and 16 GB RAM:
+| Method                                 | Circuitsize |
+|----------------------------------------|-------------|
+| GithubVerifier:verify_comm             | 279,273     |
+| GithubVerifier:verify_hash             | 292,262     |
+| OKXVerifier:verify_comm:               | 268,450     |
+| OKXVerifier:verify_hash:               | 275,878     |
 
-| Method                                 | Time (ms)    |
-|----------------------------------------|--------------|
-| Commitment-based verification          | 41113.49     |
-| Commitment-based verification (small)  | 36538.97     |
-| Hash-based verification                | 42784.63     |
-
-### Timings Devnet
-
-| Method                                 | Time (ms)    |
-|----------------------------------------|--------------|
-| Commitment-based verification          | -            |
-| Commitment-based verification (small)  | 68782.87     |
-| Hash-based verification                | -            |
-
-### Gatecounts
-
-| Method                                 | Circuitsize    |
-|----------------------------------------|--------------|
-| Commitment-based verification          | 711.763     |
-| Commitment-based verification (small)  | 321.513     |
-| Hash-based verification                | 794.646     |
-
-The flamegraphs for these 3 functions can be found in the `example` folder.
-
-### Note on zkVM Comparisons
+<!--### Note on zkVM Comparisons
 
 The benchmarks and tests in this repo measure the end-to-end performance of an Aztec transaction that verifies a Primus attestation. This means we are not only measuring the proving time of the circuit, but also include things like transaction submission and communication with a local network or devnet.
 
-Because of this, these results are not directly comparable to typical zkVM benchmarks. zkVM benchmarks usually focus on proving time in isolation and do not include blockchain-related aspects such as network interaction or state updates, so the numbers capture different kinds of costs.
+Because of this, these results are not directly comparable to typical zkVM benchmarks. zkVM benchmarks usually focus on proving time in isolation and do not include blockchain-related aspects such as network interaction or state updates, so the numbers capture different kinds of costs.-->
 
-## Tutorial: How to implement your use-case
+## Tutorial: How to implement your use-case TODO update section
 
 If you are a developer that wants to integrate an Aztec Attestation verifier in your project, you need to do the following:
 1. Complete the Aztec smart contract using the `contract_template`
