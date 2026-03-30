@@ -1,23 +1,16 @@
-use dep::aztec::macros::aztec;
+use aztec::macros::aztec;
 
 /**
-  * An Aztec smart contract template for usage of Primus Noir.
-  * This smart contract can verify 2 types of attestations from Primus:
-  * 1) Commitment-based attestations, via the `verify_comm` function.
-  * 2) Hashing-based attestations, via the `verify_hash` function.
-  *
-  * In both cases, upon successful verification of the attestation, an event is emitted.
-  *
-  * Note that the point H in storage is only needed for commitment-based attestations. 
+  * Github repository contributor example. Prove that *username* with *github_id* is 
+  * a contributor to a Github repository.
   * 
-  * TODO: 
-  * - Pick the verification function(s) that align with your usecase
-  * - Adjust global values for your usecase
-  * - Add the custom checks on the attested data in the verification function(s).
+  * The attestation is expected to have exactly two responseResolves:
+  *   responseResolves[0] the contributor login (username)
+  *   responseResolves[1] the contributor id (numeric, as a string)
   */
 #[aztec]
-pub contract BusinessProgram {
-    use att_verifier_lib::{verify_attestation_comm_1, verify_attestation_comm_2, verify_attestation_comm_3, verify_attestation_hashing};
+pub contract GithubVerifier {
+    use att_verifier_lib::{verify_attestation_comm, verify_attestation_hashing};
     use aztec::macros::{events::event, functions::{external, initializer}};
     use aztec::macros::storage::storage;
     use aztec::protocol::address::AztecAddress;
@@ -39,7 +32,7 @@ pub contract BusinessProgram {
     global NUM_ALLOWED_URLS: u32 = 3;
     // Upper limit of number of commitments in a single group
     global MAX_COMMS: u32 = 2;
-    
+
     #[event]
     struct SuccessEvent {
         sender: AztecAddress,
@@ -139,8 +132,10 @@ pub contract BusinessProgram {
         self.emit(SuccessEvent { sender, contract_address, id });
     }
 
-    // Verify commitment-based attestation and emit event upon success
-    // TODO: insert here your own checks on msgs
+    // Verify commitment-based attestation and emit event upon success.
+    // After verifying the attestation, checks the following:
+    //   msgs_1 = committed content of responseResolves[0] equals the Github username
+    //   msgs_2 = committed content of responseResolves[1] eqials the Github ID
     #[external("private")]
     fn verify_comm(
         public_key_x: [u8; 32],
@@ -155,6 +150,8 @@ pub contract BusinessProgram {
         msgs_per_group: [BoundedVec<u8, MAX_PLAINTEXT_LEN>; NUM_RESPONSE_RESOLVE],
         H: EmbeddedCurvePoint,
         id: Field,
+        github_username: BoundedVec<u8, MAX_PLAINTEXT_LEN>,
+        github_id: BoundedVec<u8, MAX_PLAINTEXT_LEN>,
     ) -> bool {
         let allowed_url_matches_hashes: [Field; NUM_REQUEST_URLS] = verify_attestation_comm(
             public_key_x,
@@ -169,9 +166,12 @@ pub contract BusinessProgram {
             H,
         );
 
-        // TODO insert checks on msgs
+        // Verify the attested username matches the expected value
+        assert(msgs_per_group[0].storage() == github_username.storage());
+        // Verify the attested contributor ID matches the expected value
+        assert(msgs_per_group[1].storage() == github_id.storage());
 
-        BusinessProgram::at(self.address)
+        GithubVerifier::at(self.address)
             .check_values_emit_event(
                 self.msg_sender(),
                 self.address,
@@ -184,8 +184,10 @@ pub contract BusinessProgram {
         true
     }
 
-    // Verify hashing-based attestation and emit event upon success
-    // TODO: insert here your own checks on plain_json_response_contents
+    // Verify hashing-based attestation and emit event upon success.
+    // After verifying the attestation, checks the following:
+    //   msgs_1 = committed content of responseResolves[0] equals the Github username
+    //   msgs_2 = committed content of responseResolves[1] eqials the Github ID
     #[external("private")]
     fn verify_hash(
         public_key_x: [u8; 32],
@@ -197,6 +199,8 @@ pub contract BusinessProgram {
         data_hashes: [[u8; 32]; NUM_RESPONSE_RESOLVE],
         contents: [BoundedVec<u8, MAX_PLAINTEXT_LEN>; NUM_RESPONSE_RESOLVE],
         id: Field,
+        github_username: BoundedVec<u8, MAX_PLAINTEXT_LEN>,
+        github_id: BoundedVec<u8, MAX_PLAINTEXT_LEN>,
     ) -> bool {
         let allowed_url_matches_hashes: [Field; NUM_REQUEST_URLS] = verify_attestation_hashing(
             public_key_x,
@@ -209,9 +213,12 @@ pub contract BusinessProgram {
             contents,
         );
 
-        // TODO insert checks on `contents`
+        // Verify the attested username matches the expected value
+        assert(contents[0].storage() == github_username.storage());
+        // Verify the attested contributor ID matches the expected value
+        assert(contents[1].storage() == github_id.storage());
 
-        BusinessProgram::at(self.address)
+        GithubVerifier::at(self.address)
             .check_urls_emit_event(
                 self.msg_sender(),
                 self.address,
@@ -223,5 +230,3 @@ pub contract BusinessProgram {
         true
     }
 }
-
-mod test;

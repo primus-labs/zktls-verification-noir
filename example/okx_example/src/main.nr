@@ -1,23 +1,14 @@
-use dep::aztec::macros::aztec;
+use aztec::macros::aztec;
 
 /**
-  * An Aztec smart contract template for usage of Primus Noir.
-  * This smart contract can verify 2 types of attestations from Primus:
-  * 1) Commitment-based attestations, via the `verify_comm` function.
-  * 2) Hashing-based attestations, via the `verify_hash` function.
+  * OKX trading pair liveness check.
   *
-  * In both cases, upon successful verification of the attestation, an event is emitted.
-  *
-  * Note that the point H in storage is only needed for commitment-based attestations. 
-  * 
-  * TODO: 
-  * - Pick the verification function(s) that align with your usecase
-  * - Adjust global values for your usecase
-  * - Add the custom checks on the attested data in the verification function(s).
+  * The attestation is expected to have exactly one responseResolve:
+  *   responseResolves[0] contains the "state" of the BTC USD trading pair
   */
 #[aztec]
-pub contract BusinessProgram {
-    use att_verifier_lib::{verify_attestation_comm_1, verify_attestation_comm_2, verify_attestation_comm_3, verify_attestation_hashing};
+pub contract OKXVerifier {
+    use att_verifier_lib::{verify_attestation_comm, verify_attestation_hashing};
     use aztec::macros::{events::event, functions::{external, initializer}};
     use aztec::macros::storage::storage;
     use aztec::protocol::address::AztecAddress;
@@ -28,18 +19,18 @@ pub contract BusinessProgram {
     // Max length of URL
     global MAX_URL_LEN: u32 = 1024;
     // Max length of plaintext message for both types of commitment
-    global MAX_PLAINTEXT_LEN: u32 = 50;
+    global MAX_PLAINTEXT_LEN: u32 = 10;
     // Number of responseResolves. This determines:
     // - the number of hashes for hash-based
     // - OR the number of groups of commitments for commitment-based
-    global NUM_RESPONSE_RESOLVE: u32 = 2;
+    global NUM_RESPONSE_RESOLVE: u32 = 1;
     // Number of request URLs
     global NUM_REQUEST_URLS: u32 = 2; 
     // Number of allowed URLs
     global NUM_ALLOWED_URLS: u32 = 3;
     // Upper limit of number of commitments in a single group
-    global MAX_COMMS: u32 = 2;
-    
+    global MAX_COMMS: u32 = 1;
+
     #[event]
     struct SuccessEvent {
         sender: AztecAddress,
@@ -139,8 +130,8 @@ pub contract BusinessProgram {
         self.emit(SuccessEvent { sender, contract_address, id });
     }
 
-    // Verify commitment-based attestation and emit event upon success
-    // TODO: insert here your own checks on msgs
+    // Verify commitment-based attestation and emit event upon success.
+    // After verifying the attestation, checks that the received status equals "live"
     #[external("private")]
     fn verify_comm(
         public_key_x: [u8; 32],
@@ -156,7 +147,7 @@ pub contract BusinessProgram {
         H: EmbeddedCurvePoint,
         id: Field,
     ) -> bool {
-        let allowed_url_matches_hashes: [Field; NUM_REQUEST_URLS] = verify_attestation_comm(
+        let allowed_url_matches_hashes: [Field; 2] = verify_attestation_comm(
             public_key_x,
             public_key_y,
             hash,
@@ -169,9 +160,11 @@ pub contract BusinessProgram {
             H,
         );
 
-        // TODO insert checks on msgs
+        let live: BoundedVec<u8, MAX_PLAINTEXT_LEN> = BoundedVec::from_array("live".as_bytes());
+        // Verify the status is "live"
+        assert(msgs_per_group[0].storage() == live.storage());
 
-        BusinessProgram::at(self.address)
+        OKXVerifier::at(self.address)
             .check_values_emit_event(
                 self.msg_sender(),
                 self.address,
@@ -184,8 +177,8 @@ pub contract BusinessProgram {
         true
     }
 
-    // Verify hashing-based attestation and emit event upon success
-    // TODO: insert here your own checks on plain_json_response_contents
+    // Verify hashing-based attestation and emit event upon success.
+    // After verifying the attestation, checks that the received status equals "live"
     #[external("private")]
     fn verify_hash(
         public_key_x: [u8; 32],
@@ -196,7 +189,7 @@ pub contract BusinessProgram {
         allowed_urls: [BoundedVec<u8, MAX_URL_LEN>; NUM_ALLOWED_URLS],
         data_hashes: [[u8; 32]; NUM_RESPONSE_RESOLVE],
         contents: [BoundedVec<u8, MAX_PLAINTEXT_LEN>; NUM_RESPONSE_RESOLVE],
-        id: Field,
+        id: Field
     ) -> bool {
         let allowed_url_matches_hashes: [Field; NUM_REQUEST_URLS] = verify_attestation_hashing(
             public_key_x,
@@ -209,9 +202,11 @@ pub contract BusinessProgram {
             contents,
         );
 
-        // TODO insert checks on `contents`
+        let live: BoundedVec<u8, MAX_PLAINTEXT_LEN> = BoundedVec::from_array("live".as_bytes());
+        // Verify the status is "live"
+        assert(contents[0].storage() == live.storage());
 
-        BusinessProgram::at(self.address)
+        OKXVerifier::at(self.address)
             .check_urls_emit_event(
                 self.msg_sender(),
                 self.address,
@@ -223,5 +218,3 @@ pub contract BusinessProgram {
         true
     }
 }
-
-mod test;
