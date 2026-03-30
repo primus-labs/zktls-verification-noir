@@ -62,7 +62,7 @@ These are the benchmarks for:
 - OKX example, commitment-based
 - OKX example, hash-based
 
-The circuitsize is for the private function that does the verification. This was obtained by profiling the tx that does verification. For mode information check the Aztec docs on [profileing](https://docs.aztec.network/developers/docs/aztec-nr/framework-description/advanced/how_to_profile_transactions). 
+The circuitsize is for the private function that does the verification. This was obtained by profiling the tx that does verification. For mode information check the Aztec docs on [profiling](https://docs.aztec.network/developers/docs/aztec-nr/framework-description/advanced/how_to_profile_transactions). 
 
 | Method                                 | Circuitsize |
 |----------------------------------------|-------------|
