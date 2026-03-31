@@ -66,10 +66,10 @@ export class Client {
   /**
    * Hashes URL strings with Poseidon2 for contract initialization.
    */
-  async hashUrls(urls: string[]): Promise<bigint[]> {
+  async hashUrls(urls: string[], maxUrlLen: number): Promise<bigint[]> {
     this.ensureInitialized();
     const urlsAsBytes = parseAllowedUrls(urls);
-    return await hashUrlsWithPoseidon2(this.bb!, urlsAsBytes);
+    return await hashUrlsWithPoseidon2(this.bb!, urlsAsBytes, maxUrlLen);
   }
 
   getNode(): AztecNode {

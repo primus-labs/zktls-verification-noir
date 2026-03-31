@@ -26,7 +26,7 @@ pub contract BusinessProgram {
 
     // Set these values according to your use-case needs
     // Max length of URL
-    global MAX_URL_LEN: u32 = 1024;
+    global MAX_URL_LEN: u32 = 128;
     // Max length of plaintext message for both types of commitment
     global MAX_PLAINTEXT_LEN: u32 = 50;
     // Number of responseResolves. This determines:

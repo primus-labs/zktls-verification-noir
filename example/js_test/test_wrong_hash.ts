@@ -1,11 +1,4 @@
-/**
- * local-verify-github-hash.ts
- *
- * Verify a GitHub contributors hash-based attestation on a local Aztec network.
- * Uses github-contributors-attestation-hash.json (HASH_COMPARISON type).
- *
- * Prerequisites: `aztec start --local-network` running on port 8080.
- */
+// First data hash made incorrect -> tx should fail
 
 import fs from "fs";
 import { parseHashingData } from "att-verifier-parsing";
@@ -69,42 +62,26 @@ console.log("Contract deployed at:", contract.address.toString());
 const githubUsernameBytes = Array.from(new TextEncoder().encode(GITHUB_USERNAME));
 const githubId = Array.from(new TextEncoder().encode(GITHUB_ID));
 
-console.log("\nProfiling verify_hash...");
-  // SchnorrAccount:entrypoint: 54,502 gates
-  // private_kernel_init: 46,811 gates
-  // GithubVerifier:verify_hash: 104,486 gates
-  // private_kernel_inner: 101,237 gates
-  // private_kernel_reset: 112,535 gates
-  // private_kernel_tail: 88,998 gates
-  // hiding_kernel: 38,069 gates
-const profile = await contract.methods.verify_hash(
-  parsed.publicKeyX, parsed.publicKeyY, parsed.hash, parsed.signature,
-  parsed.requestUrls, parsed.allowedUrls, parsed.dataHashes, parsed.plainJsonResponses,
-  parsed.id, githubUsernameBytes, githubId,
-).profile({ from: account.address, profileMode: "full", skipProofGeneration: true });
-
-for (const s of profile.executionSteps) {
-  console.log(`  ${s.functionName}: ${s.gateCount?.toLocaleString()} gates`);
-}
-
 console.log("\nExecuting verify_hash on-chain...");
 const start = Date.now();
-const { receipt } = await contract.methods.verify_hash(
+parsed.dataHashes[0] = parsed.dataHashes[1]
+try {
+  const { receipt } = await contract.methods.verify_hash(
   parsed.publicKeyX, parsed.publicKeyY, parsed.hash, parsed.signature,
   parsed.requestUrls, parsed.allowedUrls, parsed.dataHashes, parsed.plainJsonResponses,
   parsed.id, githubUsernameBytes, githubId,
-).send({ from: account.address, wait: { timeout: TX_TIMEOUT } });
+  ).send({ from: account.address, wait: { timeout: TX_TIMEOUT } });
 
-console.log(`\nTransaction confirmed!`);
-console.log(`   Status:       ${receipt.status}`);
-console.log(`   Block number: ${receipt.blockNumber}`);
-console.log(`   Duration:     ${((Date.now() - start) / 1000).toFixed(1)}s`);
-
-const { events } = await getPublicEvents<SuccessEvent>(
-  client.getNode(), GithubVerifierContract.events.SuccessEvent, { txHash: receipt.txHash, contractAddress: contract.address }
-);
-if (events.length === 0) throw new Error("SuccessEvent was NOT emitted!");
-console.log(`   SuccessEvent:  emitted (id=${events[0].event.id})`);
-
-await client.cleanup();
-process.exit(0);
+  console.log(`\nTransaction confirmed (PROBLEM!! - should have failed!)`);
+  console.log(`   Status:       ${receipt.status}`);
+  console.log(`   Duration:     ${((Date.now() - start) / 1000).toFixed(1)}s`);
+  await client.cleanup();
+  process.exit(1);
+} catch (e) {
+  console.log(`\nTransaction failed as expected.`);
+  console.log(`   Duration: ${((Date.now() - start) / 1000).toFixed(1)}s`);
+  console.log(`   Error: ${e instanceof Error ? e.message : String(e)}`);
+  console.log("\nTEST PASSED");
+  await client.cleanup();
+  process.exit(0);
+}
