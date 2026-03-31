@@ -32,13 +32,13 @@ fn verify_sig_and_urls<let MAX_URL_LEN: u32, let NUM_REQUEST_URLS: u32, let NUM_
                 assert_eq(request_urls[i].storage()[j], allowed_url.storage()[j], "URL check failed");
             }
         }
-        let mut hash_input: [Field; 1024] = [0; 1024];
-        for j in 0..1024 {
+        let mut hash_input: [Field; MAX_URL_LEN] = [0; MAX_URL_LEN];
+        for j in 0..MAX_URL_LEN {
             if j < allowed_url.len() {
                 hash_input[j] = allowed_url.storage()[j] as Field;
             }
         }
-        allowed_url_matches[i] = Poseidon2::hash(hash_input, 1024);
+        allowed_url_matches[i] = Poseidon2::hash(hash_input, MAX_URL_LEN);
     }
     allowed_url_matches
 }
@@ -133,33 +133,22 @@ pub fn verify_attestation_hashing<let MAX_URL_LEN: u32, let N: u32, let MAX_CONT
 // Unconstrained URL helpers
 // -----------------------------------------------------------------------------
 
-unconstrained fn search<let MAX_URL_LEN: u32>(
+unconstrained fn starts_with<let MAX_URL_LEN: u32>(
     haystack: BoundedVec<u8, MAX_URL_LEN>,
     needle: BoundedVec<u8, MAX_URL_LEN>,
-) -> (bool, u32) {
-    let haystack_length: u32 = haystack.len();
-    let needle_length: u32 = needle.len();
+) -> bool {
+    let needle_length = needle.len();
     assert(needle_length > 0, "needle length of size 0 not supported");
-    assert(haystack_length > 0, "haystack length of size 0 not supported");
-    let mut found = false;
-    let mut found_index: u32 = 0;
-    for i in 0..haystack_length - needle_length + 1 {
-        if (found == true) {
+    assert(haystack.len() > needle_length, "haystack shorter than needle");
+
+    let mut matched = true;
+    for j in 0..needle_length {
+        if haystack.get(j) != needle.get(j) {
+            matched = false;
             break;
         }
-        for j in 0..needle_length {
-            if haystack.get(i + j) != needle.get(j) {
-                break;
-            } else if (j == needle_length - 1) {
-                found = true;
-            }
-            if (found == true) {
-                found_index = i;
-                break;
-            }
-        }
     }
-    (found, found_index)
+    matched
 }
 
 unconstrained fn get_allowed_url_index<let MAX_URL_LEN: u32, let NUM_ALLOWED_URLS: u32>(
@@ -171,8 +160,8 @@ unconstrained fn get_allowed_url_index<let MAX_URL_LEN: u32, let NUM_ALLOWED_URL
     for i in 0..allowed_urls.len() {
         let allowed_url = allowed_urls[i];
         if (allowed_url.len() <= request_url.len()) {
-            let (result, match_position) = search(request_url, allowed_url);
-            if result & (match_position == 0) & !found {
+            let result = starts_with(request_url, allowed_url);
+            if result & !found {
                 found = true;
                 index = i;
             }
