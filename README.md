@@ -238,7 +238,7 @@ What happens exactly for a commitment-based verification? Per piece of plaintext
 
 Let's say that a message is 500 bits. Then we split it into chunks of max 253 bits, so 2 `msgs_chunks` here. Then, for each chunk, a commitment is calculated in the zkTLS functionality and we obtain this in the public data part of the attestation. In the verification step we check for all `msgs_chunks`, commitments `coms` and randomnesses `rnds` that: `sum(msgs_chunks[i] * G + rnds[i] * H) == sum(coms[i])`. Here, `G` is the standard base point of the curve and `H` a second generator point on the curve. 
 
-For commitment-based attestations, it is necessary to define an app-wide point `H`, which is public and should be in the contract storage. This point is used for the attestation verification. 
+For commitment-based attestations, it is necessary to define an app-wide point `H`, which is public and should be in the contract storage. This point is used for the attestation verification. Currently, the value usend in Primus zkTLS equals [this](https://github.com/primus-labs/zktls-verification-noir/blob/main/example/js_test/local-verify-github-comm.ts#L31-L35), but in future versions of the API it will be adjustable and therefore should be part of the public storage. 
 
 As said, per piece of plaintext that is queried (1 per responseResolve) there can be 1 or more commitments, depending on the length of the plaintext message. The longer the plaintext, the higher the amount of commitments that have to be checked in the verifier and the more expensive this becomes. This is because of the computations for the commitment check and also because a higher input size comes with higher cost.
 
