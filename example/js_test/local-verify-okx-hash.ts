@@ -20,6 +20,7 @@ const DEPLOY_TIMEOUT = 300000; // 5 min
 const TX_TIMEOUT = 120000;     // 2 min
 
 const MAX_RESPONSE_NUM = 2;
+const MAX_URL_LEN = 96;
 const ALLOWED_URL = ["https://api.github.com", "https://www.okx.com", "https://x.com"];
 const ATT_PATH = "testdata/okx-attestation-hash.json";
 
@@ -47,12 +48,14 @@ const rawData = JSON.parse(fs.readFileSync(ATT_PATH, "utf-8"));
 const parsed = parseHashingData(rawData, {
   maxResponseNum: MAX_RESPONSE_NUM,
   allowedUrls: ALLOWED_URL,
+  maxUrlLen: MAX_URL_LEN,
 });
 
 console.log("\nDeploying OKXVerifier contract...");
 const contract = await ContractHelpers.deployContract(OKXVerifierContract, client, {
   admin: account.address,
   allowedUrls: ALLOWED_URL,
+  maxUrlLen: MAX_URL_LEN,
   pointH: H,
   from: account.address,
   timeout: DEPLOY_TIMEOUT,
@@ -62,7 +65,7 @@ console.log("Contract deployed at:", contract.address.toString());
 console.log("\nProfiling verify_hash...");
   // SchnorrAccount:entrypoint: 54,502 gates
   // private_kernel_init: 46,811 gates
-  // OKXVerifier:verify_hash: 275,878 gates
+  // OKXVerifier:verify_hash: 81,378 gates
   // private_kernel_inner: 101,237 gates
   // private_kernel_reset: 112,535 gates
   // private_kernel_tail: 88,998 gates

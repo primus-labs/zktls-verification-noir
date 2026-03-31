@@ -120,7 +120,7 @@ export function parseAllowedUrls(allowedUrls: string[]): number[][] {
   return allowedUrls.map((url) => Array.from(new TextEncoder().encode(url)));
 }
 
-export function padUrl(url: number[], targetLength: number = 1024): number[] {
+export function padUrl(url: number[], targetLength: number): number[] {
   const paddedUrl = [...url];
   while (paddedUrl.length < targetLength) {
     paddedUrl.push(0);
@@ -134,12 +134,13 @@ export function padUrl(url: number[], targetLength: number = 1024): number[] {
 
 export async function hashUrlsWithPoseidon2(
   bb: Barretenberg,
-  allowedUrls: number[][]
+  allowedUrls: number[][],
+  maxUrlLen: number
 ): Promise<bigint[]> {
   const hashedUrls: bigint[] = [];
 
   for (const url of allowedUrls) {
-    const paddedUrl = padUrl(url, 1024);
+    const paddedUrl = padUrl(url, maxUrlLen);
     const frArray = paddedUrl.map((b) => new Fr(BigInt(b)).toBuffer());
     const hashFr = await bb.poseidon2Hash({ inputs: frArray });
     const hashBigInt = BigInt(Fr.fromBuffer(Buffer.from(hashFr.hash)).toString());

@@ -16,6 +16,7 @@ export interface EmbeddedCurvePoint {
 export interface ContractDeploymentParams {
   admin: AztecAddress;
   allowedUrls: string[];
+  maxUrlLen: number;
   pointH?: EmbeddedCurvePoint;
   from: AztecAddress;
   timeout?: number;
@@ -36,7 +37,7 @@ export class ContractHelpers {
     params: ContractDeploymentParams
   ): Promise<any> {
     const wallet = client.getWallet();
-    const hashedUrls = await client.hashUrls(params.allowedUrls);
+    const hashedUrls = await client.hashUrls(params.allowedUrls, params.maxUrlLen);
 
     const deploymentArgs = params.pointH
       ? [params.admin, hashedUrls, params.pointH]
